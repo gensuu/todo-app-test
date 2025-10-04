@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>グリッドTODOアプリ</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <h1>🗓️ Todoリスト - {{ current_date.strftime('%Y年%m月%d日') }}</h1>
+    
+    {% set prev_day = current_date - timedelta(days=1) %}
+    {% set next_day = current_date + timedelta(days=1) %}
+    <p>
+        <a href="{{ url_for('todo_list', date_str=prev_day.strftime('%Y-%m-%d')) }}" class="nav-link">&lt; 前日へ</a>
+        | 
+        <a href="{{ url_for('todo_list', date_str=date.today().strftime('%Y-%m-%d')) }}" class="nav-link">今日に戻る</a>
+        | 
+        <a href="{{ url_for('todo_list', date_str=next_day.strftime('%Y-%m-%d')) }}" class="nav-link">翌日へ &gt;</a>
+    </p>
+
+    <p>
+        <a href="{{ url_for('add_or_edit_task') }}" class="nav-link">➕ 新しいタスクを追加</a>
+        | 
+        <a href="{{ url_for('export_completed_tasks', date_str=current_date.strftime('%Y-%m-%d')) }}" class="nav-link">
+            💾 完了タスクをCSVでエクスポート
+        </a>
+        |
+        <a href="{{ url_for('import_excel') }}" class="nav-link">📄 Excelからインポート</a> 
+    </p>
+    <hr>
+    
+    <h2 id="grid-progress">🟦 タスク進捗 方眼グリッド (全 {{ total_grid_count }} マス中 <span id="completed-count-display">{{ completed_grid_count }}</span> マス完了)</h2>
+
+    <div class="grid-container">
+        {% for i in range(total_grid_count) %}
+            {% if i < completed_grid_count %}
+                <div class="grid-cell filled"></div>
+            {% else %}
+                <div class="grid-cell"></div>
+            {% endif %}
+        {% endfor %}
+    </div>
+    <hr>
+
+    <h2>✅ タスク一覧 (バレットジャーナル風表示)</h2>
+    <div class="task-list">
+        {% for master_task in master_tasks %}
+            <div class="master-task">{{ master_task.title }}</div> 
+            <ul>
+                {% for subtask in master_task.subtasks %}
+                    {% if master_task.due_date == current_date or subtask.is_completed == False %}
+                        
+                        <li class="sub-task {% if subtask.is_completed %}completed{% endif %}"
+                            data-subtask-id="{{ subtask.id }}"
+                            data-grid-count="{{ subtask.grid_count }}">
+                            
+                            <span class="complete-toggle" style="cursor: pointer; text-decoration: none;"
+                                  data-is-completed="{{ 'true' if subtask.is_completed else 'false' }}">
+                                [{{ '☑️' if subtask.is_completed else '◻️' }}]
+                            </span>
+                            
+                            {{ subtask.content }} ({{ subtask.grid_count }}マス) 
+                            
+                            <a href="{{ url_for('add_or_edit_task', master_id=master_task.id) }}" style="margin-left: 10px; font-size: 0.8em; text-decoration: none;">[✏️ 編集]</a>
+                        </li>
+                        
+                    {% endif %}
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>この日に表示するタスクはありません。タスクを追加するか、別の日付を確認してください。</p>
+        {% endfor %}
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const toggleElements = document.querySelectorAll('.complete-toggle');
+            const gridCells = document.querySelectorAll('.grid-cell');
+            const completedCountDisplay = document.getElementById('completed-count-display');
+            let currentCompletedCount = parseInt(completedCountDisplay.textContent);
+
+            // --- 1. タスク完了ボタンのイベントリスナー ---
+            toggleElements.forEach(toggle => {
+                toggle.addEventListener('click', async (event) => {
+                    const listItem = toggle.closest('li');
+                    const subtaskId = listItem.dataset.subtaskId;
+                    const gridCount = parseInt(listItem.dataset.gridCount);
+                    const isCompleted = toggle.dataset.isCompleted === 'true';
+
+                    // サーバーAPIを非同期で呼び出す (app.pyの /api/complete_subtask/<id> に POST リクエスト)
+                    const response = await fetch(`/api/complete_subtask/${subtaskId}`, {
+                        method: 'POST',
+                        // FlaskはPOSTでCSRFトークンを要求しないため、ヘッダーはシンプルでOK
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        
+                        // 2. DOM (画面表示) の更新
+                        
+                        // a. リストアイテムのスタイルを更新
+                        if (data.is_completed) {
+                            listItem.classList.add('completed');
+                            toggle.innerHTML = '[☑️]';
+                            toggle.dataset.isCompleted = 'true';
+                        } else {
+                            listItem.classList.remove('completed');
+                            toggle.innerHTML = '[◻️]';
+                            toggle.dataset.isCompleted = 'false';
+                        }
+                        
+                        // b. 方眼グリッドを更新
+                        updateGrid(data.completed_grid_count);
+                        completedCountDisplay.textContent = data.completed_grid_count;
+                        
+                        // c. (オプショナル) 完了タスクを画面から消す（翌日分へ繰り越す）
+                        // 現在表示されているタスクは、繰り越し対象であった場合、完了時に画面から消えるべきです。
+                        // ただし、このロジックは複雑になるため、ここではページ遷移時（日付移動時）に任せ、
+                        // リアルタイムでの非表示化は実装を省略します。
+                    } else {
+                        alert('タスクの更新に失敗しました。');
+                    }
+                });
+            });
+
+            // --- 2. 方眼グリッドの描画更新関数 ---
+            function updateGrid(newCompletedCount) {
+                gridCells.forEach((cell, index) => {
+                    if (index < newCompletedCount) {
+                        cell.classList.add('filled');
+                    } else {
+                        cell.classList.remove('filled');
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>

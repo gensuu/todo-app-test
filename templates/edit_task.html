@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ 'タスク編集' if master_task else 'タスク追加' }}</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        .subtask-item { margin-top: 10px; border-left: 3px solid #ccc; padding-left: 10px; }
+        .subtask-item label { display: block; margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+    <a href="{{ url_for('todo_list') }}">← Todoリストに戻る</a>
+    <h1>{{ '主タスクを編集' if master_task else '新しい主タスクを追加' }}</h1>
+    
+    <form method="POST" action="{{ url_for('add_or_edit_task', master_id=master_task.id if master_task else None) }}">
+        <h3>主タスク情報</h3>
+        <p>
+            <label for="master_title">主タスク名:</label>
+            <input type="text" name="master_title" id="master_title" required 
+                   value="{{ master_task.title if master_task else '' }}">
+        </p>
+
+        <h3>サブタスク設定</h3>
+        <p>
+            <label for="subtask_count_control">サブタスクの個数（入力欄の数）:</label>
+            <input type="number" id="subtask_count_control" min="1" max="10" value="{{ existing_subtasks | length if master_task else 3 }}">
+            <small>※最大10個まで表示されます</small>
+        </p>
+
+        <div id="subtask_fields">
+            </div>
+
+        <button type="submit">{{ '更新' if master_task else '追加' }}</button>
+    </form>
+    
+    <script>
+        const subtaskCountControl = document.getElementById('subtask_count_control');
+        const subtaskFields = document.getElementById('subtask_fields');
+        const existingSubtasks = JSON.parse('{{ existing_subtasks | tojson }}');
+
+        // 入力欄を生成する関数
+        function renderSubtaskFields(count) {
+            subtaskFields.innerHTML = '';
+            for (let i = 1; i <= count; i++) {
+                // 既存データがあればそれをロード
+                const subtask = existingSubtasks[i - 1] || {};
+                const subContent = subtask.content || '';
+                const gridCount = subtask.grid_count || 1;
+
+                const div = document.createElement('div');
+                div.className = 'subtask-item';
+                div.innerHTML = `
+                    <h4>サブタスク ${i}</h4>
+                    <label>内容:</label>
+                    <input type="text" name="sub_content_${i}" value="${subContent}" required>
+                    <label>マス数 (1個以上の数字):</label>
+                    <input type="number" name="grid_count_${i}" value="${gridCount}" min="1" required>
+                `;
+                subtaskFields.appendChild(div);
+            }
+        }
+
+        // 初期ロード
+        const initialCount = existingSubtasks.length > 0 ? existingSubtasks.length : 3;
+        subtaskCountControl.value = initialCount;
+        renderSubtaskFields(initialCount);
+
+        // 変更イベント
+        subtaskCountControl.addEventListener('input', (e) => {
+            const count = parseInt(e.target.value);
+            if (count >= 1 && count <= 10) {
+                renderSubtaskFields(count);
+            }
+        });
+    </script>
+</body>
+</html>

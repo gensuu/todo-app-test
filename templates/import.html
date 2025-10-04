@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excelインポート</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        .back-link { display: block; margin-bottom: 20px; text-decoration: none; color: #007bff; }
+    </style>
+</head>
+<body>
+    <a href="{{ url_for('todo_list') }}" class="back-link">← Todoリストに戻る</a>
+    <h1>📂 Excelタスクインポート</h1>
+    <p>タスクを記載した Excel ファイル (.xlsx) をアップロードしてください。</p>
+    <p><strong>【ファイル形式のルール】</strong></p>
+    <ul>
+        <li>1行目（ヘッダー）は無視されます。タスクは**2行目以降**に記述してください。</li>
+        <li>**B列**に「主タスク」（例: 朝ごはん）を入力してください。</li>
+        <li>**C列以降**に「サブタスク」（例: 味噌汁、玄米、魚）を入力してください。</li>
+        <li>インポートされるサブタスクの**マス数**は、すべて**デフォルトの「1」**として登録されます。（後から編集可能です）</li>
+    </ul>
+
+    <form method="POST" enctype="multipart/form-data" action="{{ url_for('import_excel') }}">
+        <input type="file" name="excel_file" accept=".xlsx" required>
+        <button type="submit">インポートして登録</button>
+    </form>
+</body>
+</html>

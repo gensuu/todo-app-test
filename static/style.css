@@ -1,0 +1,63 @@
+/* ==================================== */
+/* 3.1 方眼用紙のデザイン (5mm x 5mm) */
+/* ==================================== */
+
+.grid-container {
+    display: grid;
+    /* 縦横比はメディアクエリで変更するため、ここでは一般的なレイアウトを定義 */
+    grid-template-columns: repeat(25, 5mm); /* デフォルト: 横に25マス（5の倍数） */
+    grid-auto-rows: 5mm; /* 縦のサイズ */
+    
+    border: 1px solid #333; /* 方眼全体のアウトライン */
+    padding: 2px;
+    margin-bottom: 20px;
+    width: fit-content; /* グリッドの幅をマス目に合わせる */
+    max-width: 100%; /* スマホでの横スクロール防止 */
+    overflow-x: auto; /* グリッドが画面からはみ出た場合、横スクロールを可能にする */
+}
+
+.grid-cell {
+    width: 5mm;
+    height: 5mm;
+    border: 0.5px solid #e0e0e0; /* 薄い方眼の線 */
+    box-sizing: border-box; /* 境界線を幅と高さに含める */
+    background-color: transparent;
+    transition: background-color 0.3s; /* 塗りつぶしの変化を滑らかにする */
+}
+
+/* 塗りつぶし (タスク完了) */
+.grid-cell.filled {
+    background-color: #6a5acd; /* 塗りつぶす色（例: ラベンダー） */
+}
+
+/* ==================================== */
+/* 3.2 デバイスごとの比率変更 (CSSメディアクエリ) */
+/* ==================================== */
+
+/* --- デスクトップ/タブレット (画面幅 768px以上) --- */
+/* 横に25マス表示を維持 */
+
+/* --- スマートフォン (画面幅 767px以下) --- */
+@media (max-width: 767px) {
+    .grid-container {
+        /* スマートフォンでは、横のマス数を減らすか、表示をコンパクトにする */
+        grid-template-columns: repeat(15, 5mm); /* 横に15マス（5の倍数）に調整 */
+        /* width: fit-content; のため、残りのマスは下に折り返します */
+    }
+}
+
+/* --- より大きなスクリーン (画面幅 1200px以上) --- */
+@media (min-width: 1200px) {
+    .grid-container {
+        grid-template-columns: repeat(30, 5mm); /* 横に30マス（5の倍数）に増やす */
+    }
+}
+
+/* その他のスタイル */
+/* templates/index.html のスタイルを static/style.css に移動しても良い */
+body { font-family: sans-serif; padding: 20px; }
+.master-task { font-size: 1.2em; font-weight: bold; margin-top: 25px; padding-left: 0; list-style: none; }
+.sub-task { margin-left: 20px; list-style-type: disc; margin-bottom: 5px; }
+.completed { text-decoration: line-through; font-style: italic; color: #888; }
+.nav-link { margin: 0 5px; text-decoration: none; color: #007bff; }
+.nav-link:hover { text-decoration: underline; }
