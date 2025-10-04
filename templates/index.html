@@ -22,8 +22,8 @@
     <p>
         <a href="{{ url_for('add_or_edit_task') }}" class="nav-link">➕ 新しいタスクを追加</a>
         | 
-        <a href="{{ url_for('export_completed_tasks', date_str=current_date.strftime('%Y-%m-%d')) }}" class="nav-link">
-            💾 完了タスクをCSVでエクスポート
+        <a href="{{ url_for('export_to_sheet', date_str=current_date.strftime('%Y-%m-%d')) }}" class="nav-link">
+            ✍️ 完了タスクをスプレッドシートに書き出し
         </a>
         |
         <a href="{{ url_for('import_excel') }}" class="nav-link">📄 Excelからインポート</a> 
@@ -78,20 +78,16 @@
             const toggleElements = document.querySelectorAll('.complete-toggle');
             const gridCells = document.querySelectorAll('.grid-cell');
             const completedCountDisplay = document.getElementById('completed-count-display');
-            let currentCompletedCount = parseInt(completedCountDisplay.textContent);
-
+            
             // --- 1. タスク完了ボタンのイベントリスナー ---
             toggleElements.forEach(toggle => {
                 toggle.addEventListener('click', async (event) => {
                     const listItem = toggle.closest('li');
                     const subtaskId = listItem.dataset.subtaskId;
-                    const gridCount = parseInt(listItem.dataset.gridCount);
-                    const isCompleted = toggle.dataset.isCompleted === 'true';
-
+                    
                     // サーバーAPIを非同期で呼び出す (app.pyの /api/complete_subtask/<id> に POST リクエスト)
                     const response = await fetch(`/api/complete_subtask/${subtaskId}`, {
                         method: 'POST',
-                        // FlaskはPOSTでCSRFトークンを要求しないため、ヘッダーはシンプルでOK
                     });
 
                     if (response.ok) {
@@ -114,12 +110,8 @@
                         updateGrid(data.completed_grid_count);
                         completedCountDisplay.textContent = data.completed_grid_count;
                         
-                        // c. (オプショナル) 完了タスクを画面から消す（翌日分へ繰り越す）
-                        // 現在表示されているタスクは、繰り越し対象であった場合、完了時に画面から消えるべきです。
-                        // ただし、このロジックは複雑になるため、ここではページ遷移時（日付移動時）に任せ、
-                        // リアルタイムでの非表示化は実装を省略します。
                     } else {
-                        alert('タスクの更新に失敗しました。');
+                        alert('タスクの更新に失敗しました。認証の問題やサーバー側のエラーを確認してください。');
                     }
                 });
             });
