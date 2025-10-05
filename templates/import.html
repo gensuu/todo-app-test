@@ -1,29 +1,43 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="ja" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Excelインポート</title>
-    <style>
-        body { font-family: sans-serif; padding: 20px; }
-        .back-link { display: block; margin-bottom: 20px; text-decoration: none; color: #007bff; }
-    </style>
+    <title>Excelからインポート</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <a href="{{ url_for('todo_list') }}" class="back-link">← Todoリストに戻る</a>
-    <h1>📂 Excelタスクインポート</h1>
-    <p>タスクを記載した Excel ファイル (.xlsx) をアップロードしてください。</p>
-    <p><strong>【ファイル形式のルール】</strong></p>
-    <ul>
-        <li>1行目（ヘッダー）は無視されます。タスクは**2行目以降**に記述してください。</li>
-        <li>**B列**に「主タスク」（例: 朝ごはん）を入力してください。</li>
-        <li>**C列以降**に「サブタスク」（例: 味噌汁、玄米、魚）を入力してください。</li>
-        <li>インポートされるサブタスクの**マス数**は、すべて**デフォルトの「1」**として登録されます。（後から編集可能です）</li>
-    </ul>
-
-    <form method="POST" enctype="multipart/form-data" action="{{ url_for('import_excel') }}">
-        <input type="file" name="excel_file" accept=".xlsx" required>
-        <button type="submit">インポートして登録</button>
-    </form>
+    <div class="container my-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>📄 Excelからインポート</h2>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text">
+                            以下の形式で作成したExcelファイル (.xlsx) をアップロードしてください。
+                        </p>
+                        <ul class="list-group list-group-flush mb-3">
+                            <li class="list-group-item"><strong>A列:</strong> 期限日 (YYYY-MM-DD形式)</li>
+                            <li class="list-group-item"><strong>B列:</strong> 親タスクのタイトル</li>
+                            <li class="list-group-item"><strong>C列以降:</strong> サブタスクの内容 (1セルに1サブタスク)</li>
+                        </ul>
+                        <form method="post" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label for="excel_file" class="form-label">Excelファイルを選択</label>
+                                <input class="form-control" type="file" id="excel_file" name="excel_file" accept=".xlsx" required>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <a href="{{ url_for('todo_list') }}" class="btn btn-outline-secondary">キャンセル</a>
+                                <button type="submit" class="btn btn-primary">アップロード</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

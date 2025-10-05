@@ -1,77 +1,106 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="ja" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
-    <title>{{ 'タスク編集' if master_task else 'タスク追加' }}</title>
-    <style>
-        body { font-family: sans-serif; padding: 20px; }
-        .subtask-item { margin-top: 10px; border-left: 3px solid #ccc; padding-left: 10px; }
-        .subtask-item label { display: block; margin-bottom: 5px; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if master_task %}タスクの編集{% else %}新しいタスクの追加{% endif %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <a href="{{ url_for('todo_list') }}">← Todoリストに戻る</a>
-    <h1>{{ '主タスクを編集' if master_task else '新しい主タスクを追加' }}</h1>
-    
-    <form method="POST" action="{{ url_for('add_or_edit_task', master_id=master_task.id if master_task else None) }}">
-        <h3>主タスク情報</h3>
-        <p>
-            <label for="master_title">主タスク名:</label>
-            <input type="text" name="master_title" id="master_title" required 
-                   value="{{ master_task.title if master_task else '' }}">
-        </p>
+    <div class="container my-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="card edit-task-card">
+                    <div class="card-header">
+                        <h2>{% if master_task %}タスクの編集{% else %}新しいタスクの追加{% endif %}</h2>
+                    </div>
+                    <div class="card-body">
+                        <form method="post">
+                            <div class="mb-3">
+                                <label for="master_title" class="form-label">親タスクのタイトル</label>
+                                <input type="text" class="form-control" id="master_title" name="master_title" value="{{ master_task.title if master_task else '' }}" required>
+                            </div>
+                            <div class="mb-4">
+                                <label for="due_date" class="form-label">期限日</label>
+                                <input type="date" class="form-control" id="due_date" name="due_date" value="{{ (master_task.due_date if master_task else date.today()).strftime('%Y-%m-%d') }}">
+                            </div>
+                            <hr>
+                            
+                            <h5 class="mb-3">サブタスク</h5>
+                            <div id="subtasks-container">
+                                </div>
 
-        <h3>サブタスク設定</h3>
-        <p>
-            <label for="subtask_count_control">サブタスクの個数（入力欄の数）:</label>
-            <input type="number" id="subtask_count_control" min="1" max="10" value="{{ existing_subtasks | length if master_task else 3 }}">
-            <small>※最大10個まで表示されます</small>
-        </p>
-
-        <div id="subtask_fields">
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-between mt-4">
+                                <button type="button" id="add-subtask-btn" class="btn btn-secondary"><i class="bi bi-plus-circle"></i> サブタスクを追加</button>
+                                <div>
+                                    <a href="{{ url_for('todo_list') }}" class="btn btn-outline-secondary">キャンセル</a>
+                                    <button type="submit" class="btn btn-primary">保存する</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
             </div>
+        </div>
+    </div>
 
-        <button type="submit">{{ '更新' if master_task else '追加' }}</button>
-    </form>
-    
     <script>
-        const subtaskCountControl = document.getElementById('subtask_count_control');
-        const subtaskFields = document.getElementById('subtask_fields');
-        const existingSubtasks = JSON.parse('{{ existing_subtasks | tojson }}');
+        document.addEventListener('DOMContentLoaded', () => {
+            const container = document.getElementById('subtasks-container');
+            const addBtn = document.getElementById('add-subtask-btn');
+            const maxSubtasks = 10;
+            
+            // This is the data from Flask
+            const existingSubtasks = {{ existing_subtasks | tojson | safe }};
 
-        // 入力欄を生成する関数
-        function renderSubtaskFields(count) {
-            subtaskFields.innerHTML = '';
-            for (let i = 1; i <= count; i++) {
-                // 既存データがあればそれをロード
-                const subtask = existingSubtasks[i - 1] || {};
-                const subContent = subtask.content || '';
-                const gridCount = subtask.grid_count || 1;
+            let subtaskCounter = 0;
 
-                const div = document.createElement('div');
-                div.className = 'subtask-item';
-                div.innerHTML = `
-                    <h4>サブタスク ${i}</h4>
-                    <label>内容:</label>
-                    <input type="text" name="sub_content_${i}" value="${subContent}" required>
-                    <label>マス数 (1個以上の数字):</label>
-                    <input type="number" name="grid_count_${i}" value="${gridCount}" min="1" required>
+            const createSubtaskRow = (task = { content: '', grid_count: 1 }) => {
+                if (subtaskCounter >= maxSubtasks) return;
+                subtaskCounter++;
+
+                const row = document.createElement('div');
+                row.classList.add('row', 'g-2', 'mb-2', 'align-items-center', 'subtask-row');
+                row.innerHTML = `
+                    <div class="col">
+                        <input type="text" class="form-control" name="sub_content_${subtaskCounter}" placeholder="サブタスクの内容" value="${task.content}" required>
+                    </div>
+                    <div class="col-3 col-md-2">
+                        <div class="input-group">
+                            <input type="number" class="form-control" name="grid_count_${subtaskCounter}" min="1" value="${task.grid_count}" required>
+                            <span class="input-group-text">マス</span>
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <button type="button" class="btn btn-sm btn-danger remove-subtask-btn"><i class="bi bi-trash"></i></button>
+                    </div>
                 `;
-                subtaskFields.appendChild(div);
+                container.appendChild(row);
+            };
+            
+            // Populate with existing subtasks
+            if (existingSubtasks.length > 0) {
+                existingSubtasks.forEach(task => createSubtaskRow(task));
+            } else {
+                // Add one empty row for new tasks
+                createSubtaskRow();
             }
-        }
 
-        // 初期ロード
-        const initialCount = existingSubtasks.length > 0 ? existingSubtasks.length : 3;
-        subtaskCountControl.value = initialCount;
-        renderSubtaskFields(initialCount);
+            // Add new subtask
+            addBtn.addEventListener('click', () => {
+                createSubtaskRow();
+            });
 
-        // 変更イベント
-        subtaskCountControl.addEventListener('input', (e) => {
-            const count = parseInt(e.target.value);
-            if (count >= 1 && count <= 10) {
-                renderSubtaskFields(count);
-            }
+            // Remove subtask
+            container.addEventListener('click', (e) => {
+                if (e.target.closest('.remove-subtask-btn')) {
+                    e.target.closest('.subtask-row').remove();
+                    // Note: This simple removal means index numbers won't be contiguous on submit,
+                    // but the Flask backend handles this correctly by checking for sub_content_1, sub_content_2, etc.
+                }
+            });
         });
     </script>
 </body>
