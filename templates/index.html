@@ -4,8 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>グリッドTODOアプリ</title>
+    <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -13,6 +16,7 @@
     <div class="container-fluid">
         <div class="row">
 
+            <!-- Left Sidebar (Desktop/Tablet) -->
             <aside class="col-md-3 d-none d-md-block sidebar-left">
                 <div class="sidebar-sticky">
                     <h2 class="sidebar-title">メニュー</h2>
@@ -30,6 +34,7 @@
                 </div>
             </aside>
 
+            <!-- Main Content -->
             <main class="col-md-6 col-lg-6 main-content">
                 <header class="text-center my-4">
                     <h1>🗓️ Todoリスト</h1>
@@ -43,35 +48,53 @@
                     </div>
                 </header>
                 
+                <!-- Collapsible Grid Section -->
                 <div class="grid-section">
-                    <button class="btn btn-secondary w-100 mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#collapseGrid" aria-expanded="false" aria-controls="collapseGrid">
+                    <button class="btn btn-secondary w-100 mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#collapseGrid" aria-expanded="true" aria-controls="collapseGrid">
                         🟦 タスク進捗 方眼グリッド (全 {{ total_grid_count }} マス中 <span id="completed-count-display">{{ completed_grid_count }}</span> マス完了)
                     </button>
-                    <div class="collapse" id="collapseGrid">
+                    <div class="collapse show" id="collapseGrid">
                         <div class="card card-body">
-                             <div class="grid-container mx-auto">
-                                {% for i in range(total_grid_count) %}
-                                    <div class="grid-cell {% if i < completed_grid_count %}filled{% endif %}"></div>
-                                {% endfor %}
+                            <div class="grid-wrapper" style="--cols: {{ GRID_COLS }};">
+                                <div class="new-grid-container" style="--cols: {{ GRID_COLS }}; --rows: {{ grid_rows }};">
+                                    {% for i in range(GRID_COLS * grid_rows) %}
+                                        {% set cell_num = loop.index0 %}
+                                        <div class="grid-cell
+                                            {% if cell_num < total_grid_count %}task-area{% endif %}
+                                            {% if cell_num < completed_grid_count %}completed{% endif %}
+                                        "></div>
+                                    {% endfor %}
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
+                <!-- Task List -->
                 <div class="task-list-container">
                     <h2>✅ タスク一覧</h2>
                     {% for master_task in master_tasks %}
                         <div class="card master-task-card mb-3">
                             <div class="card-header d-flex justify-content-between align-items-center">
-                                <span>{{ master_task.title }}</span>
+                                <span>
+                                    {{ master_task.title }}
+                                    <!-- ▼▼▼ 日付表示ロジックを更新 ▼▼▼ -->
+                                    {% set relevant_subtask = master_task.subtasks|selectattr('completion_date', 'equalto', current_date)|first %}
+                                    {% if relevant_subtask %}
+                                        {% set diff_days = (relevant_subtask.completion_date - master_task.due_date).days %}
+                                        <small class="text-muted">(期限:{{ master_task.due_date.strftime('%m/%d') }} | 完了:{{ relevant_subtask.completion_date.strftime('%m/%d') }} {% if diff_days != 0 %}<span class="diff-days">({{ '%+d'|format(diff_days) }}日)</span>{% endif %})</small>
+                                    {% else %}
+                                        <small class="text-muted">({{ master_task.due_date.strftime('%m/%d') }})</small>
+                                    {% endif %}
+                                    <!-- ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ -->
+                                </span>
                                 <a href="{{ url_for('add_or_edit_task', master_id=master_task.id) }}" class="btn btn-sm btn-outline-light">✏️ 編集</a>
                             </div>
                             <ul class="list-group list-group-flush">
                                 {% for subtask in master_task.subtasks %}
-                                    {% if master_task.due_date == current_date or subtask.is_completed == False %}
+                                    {% if subtask.completion_date == current_date or (subtask.is_completed == False and master_task.due_date <= current_date) %}
                                         <li class="list-group-item sub-task d-flex align-items-center {% if subtask.is_completed %}completed{% endif %}"
-                                            data-subtask-id="{{ subtask.id }}"
-                                            data-grid-count="{{ subtask.grid_count }}">
+                                            data-subtask-id="{{ subtask.id }}">
                                             <span class="complete-toggle flex-grow-1" style="cursor: pointer;">
                                                 <i class="bi {{ 'bi-check-square-fill' if subtask.is_completed else 'bi-square' }}"></i>
                                                 {{ subtask.content }} ({{ subtask.grid_count }}マス)
@@ -89,6 +112,7 @@
                 </div>
             </main>
 
+            <!-- Right Sidebar (Desktop/Tablet) -->
             <aside class="col-md-3 d-none d-md-block sidebar-right">
                 <div class="sidebar-sticky">
                     <h2 class="sidebar-title">サマリー</h2>
@@ -112,6 +136,7 @@
         </div>
     </div>
     
+    <!-- Bottom Navigation (Mobile) -->
     <nav class="d-md-none navbar fixed-bottom navbar-dark bg-dark">
         <div class="container-fluid justify-content-around">
             <a href="{{ url_for('add_or_edit_task') }}" class="btn btn-primary"><i class="bi bi-plus-circle-fill"></i> 新タスク</a>
@@ -121,6 +146,7 @@
     </nav>
 
 
+    <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
     <script>
@@ -135,20 +161,8 @@
                     const response = await fetch(`/api/complete_subtask/${subtaskId}`, { method: 'POST' });
                     if (!response.ok) throw new Error('Network response was not ok');
                     
-                    const data = await response.json();
-                    
-                    const icon = toggle.querySelector('i');
-                    if (data.is_completed) {
-                        listItem.classList.add('completed');
-                        icon.classList.replace('bi-square', 'bi-check-square-fill');
-                    } else {
-                        listItem.classList.remove('completed');
-                        icon.classList.replace('bi-check-square-fill', 'bi-square');
-                    }
-                    
-                    document.getElementById('completed-count-display').textContent = data.completed_grid_count;
-                    updateGrid(data.completed_grid_count);
-                    updateProgressCircle();
+                    location.reload();
+
                 } catch (error) {
                     console.error('タスク更新エラー:', error);
                     alert('タスクの更新に失敗しました。');
@@ -156,20 +170,12 @@
             });
         });
 
-        // --- 2. Grid Update Function ---
-        const gridCells = document.querySelectorAll('.grid-cell');
-        function updateGrid(newCompletedCount) {
-            gridCells.forEach((cell, index) => {
-                cell.classList.toggle('filled', index < newCompletedCount);
-            });
-        }
-
-        // --- 3. Circular Progress Bar Update Function ---
+        // --- 2. Circular Progress Bar Update Function ---
         const circle = document.querySelector('.progress-circle');
         function updateProgressCircle() {
             if (circle) {
-                const totalGridCount = {{ total_grid_count }};
-                const completedGridCount = parseInt(document.getElementById('completed-count-display').textContent, 10);
+                const totalGridCount = parseInt("{{ total_grid_count or 0 }}", 10);
+                const completedGridCount = parseInt("{{ completed_grid_count or 0 }}", 10);
                 
                 let progress = totalGridCount > 0 ? Math.round((completedGridCount / totalGridCount) * 100) : 0;
                 
@@ -185,3 +191,4 @@
     </script>
 </body>
 </html>
+
