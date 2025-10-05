@@ -301,8 +301,13 @@ def export_to_sheet(date_str):
     return f"完了タスク {len(data_to_append)} 件をGoogleスプレッドシート '{SPREADSHEET_NAME}' に書き出しました。", 200
 
 # --- 9. アプリの実行 ---
+
+# ▼▼▼ このブロックをまるごと追加 ▼▼▼
+# アプリケーションコンテキスト内でテーブルを作成
+with app.app_context():
+    db.create_all()
+# ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
     app.run(debug=True)
 
