@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import or_, and_
+from sqlalchemy import or_, and_, TypeDecorator, String, Date # ★ TypeDecoratorとString, Dateを追加
 from datetime import date, datetime, timedelta
 import os
 import openpyxl
@@ -23,6 +23,25 @@ app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
+# ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+# ★【重要】SQLiteとの互換性のためのカスタムDate型を定義 ★
+# ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+class DateAsString(TypeDecorator):
+    """日付を'YYYY-MM-DD'形式の文字列としてDBに保存するカスタム型"""
+    impl = String
+
+    def process_bind_param(self, value, dialect):
+        # Pythonのdateオブジェクトを文字列に変換してDBに保存
+        if value is not None:
+            return value.isoformat()
+        return None
+
+    def process_result_value(self, value, dialect):
+        # DBの文字列をPythonのdateオブジェクトに変換してアプリで使う
+        if value is not None:
+            return date.fromisoformat(value)
+        return None
+
 # アップロードフォルダの設定 (Excelインポート用)
 UPLOAD_FOLDER = 'uploads'
 if not os.path.exists(UPLOAD_FOLDER):
@@ -33,7 +52,7 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 class MasterTask(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(100), nullable=False)
-    due_date = db.Column(db.Date, default=date.today, nullable=False)
+    due_date = db.Column(DateAsString, default=date.today, nullable=False) # ★ db.Dateから変更
     subtasks = db.relationship('SubTask', backref='master_task', lazy=True, cascade="all, delete-orphan")
 
 class SubTask(db.Model):
@@ -42,7 +61,7 @@ class SubTask(db.Model):
     content = db.Column(db.String(100), nullable=False)
     grid_count = db.Column(db.Integer, default=1, nullable=False)
     is_completed = db.Column(db.Boolean, default=False)
-    completion_date = db.Column(db.Date, nullable=True)
+    completion_date = db.Column(DateAsString, nullable=True) # ★ db.Dateから変更
 
 # --- 3. Gspreadクライアント初期化関数 ---
 # (変更なし)
@@ -140,13 +159,13 @@ def add_or_edit_task(master_id=None):
     if request.method == 'POST':
         master_title = request.form.get('master_title')
         due_date_str = request.form.get('due_date')
-        due_date = datetime.strptime(due_date_str, '%Y-%m-%d').date() if due_date_str else date.today()
+        due_date_obj = datetime.strptime(due_date_str, '%Y-%m-%d').date() if due_date_str else date.today()
 
         if master_task:
             master_task.title = master_title
-            master_task.due_date = due_date
+            master_task.due_date = due_date_obj
         else:
-            master_task = MasterTask(title=master_title, due_date=due_date)
+            master_task = MasterTask(title=master_title, due_date=due_date_obj)
             db.session.add(master_task)
             db.session.flush()
 
@@ -233,6 +252,7 @@ def import_excel():
     return render_template('import.html')
 
 # --- 8. スプレッドシート書き出し機能 ---
+# (変更なし)
 @app.route('/export_to_sheet/<date_str>')
 def export_to_sheet(date_str):
     try:
@@ -259,16 +279,12 @@ def export_to_sheet(date_str):
     except gspread.SpreadsheetNotFound:
         return f"スプレッドシート '{SPREADSHEET_NAME}' が見つかりません。", 500
 
-    # ▼▼▼ ヘッダー行に「期限日との差(日)」を追加 ▼▼▼
     if not worksheet.row_values(1):
         worksheet.append_row(['完了日', '主タスクID', '主タスク', 'サブタスク内容', 'マス数', '期限日', '期限日との差(日)'])
-    # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
     data_to_append = []
     for subtask in completed_subtasks:
-        # ▼▼▼ 日付の差を計算 ▼▼▼
         day_diff = (subtask.completion_date - subtask.master_task.due_date).days
-        # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
         data_to_append.append([
             subtask.completion_date.strftime('%Y-%m-%d'),
             subtask.master_id,
@@ -276,7 +292,7 @@ def export_to_sheet(date_str):
             subtask.content,
             subtask.grid_count,
             subtask.master_task.due_date.strftime('%Y-%m-%d'),
-            day_diff # 計算した差を追加
+            day_diff
         ])
 
     if data_to_append:
