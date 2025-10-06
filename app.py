@@ -88,19 +88,15 @@ def load_user(user_id):
 def get_jst_today():
     return datetime.now(pytz.timezone('Asia/Tokyo')).date()
 
-# ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
 # --- 4. 【新機能】手動データベース初期化ルート ---
-# ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
 @app.route('/init-db/<secret_key>')
 def init_db(secret_key):
-    # 環境変数に設定したSECRET_KEYと一致する場合のみ実行
     if secret_key == os.environ.get("FLASK_SECRET_KEY"):
         with app.app_context():
             db.create_all()
         return "データベースが初期化されました。"
     else:
         return "認証キーが正しくありません。", 403
-# ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
 # --- 5. 認証・ログイン関連のルート ---
 @app.route("/")
@@ -157,8 +153,22 @@ def settings():
         flash('スプレッドシートURLを保存しました。')
         return redirect(url_for('settings'))
     
+    # ▼▼▼ 次回削除までの日数を計算 ▼▼▼
+    days_until_deletion = None
+    oldest_completed_task = SubTask.query.join(MasterTask).filter(
+        MasterTask.user_id == current_user.id,
+        SubTask.is_completed == True
+    ).order_by(SubTask.completion_date.asc()).first()
+
+    if oldest_completed_task and oldest_completed_task.completion_date:
+        today = get_jst_today()
+        deletion_date = oldest_completed_task.completion_date + timedelta(days=32)
+        days_until_deletion = (deletion_date - today).days
+    # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
     sa_email = os.environ.get('SERVICE_ACCOUNT_EMAIL', '（管理者が設定してください）')
-    return render_template('settings.html', sa_email=sa_email)
+    # ★ テンプレートに days_until_deletion を渡す
+    return render_template('settings.html', sa_email=sa_email, days_until_deletion=days_until_deletion)
 
 # --- 6. Todoアプリ本体のルート ---
 @app.route('/todo')
@@ -331,3 +341,4 @@ def export_to_sheet():
 # --- アプリの実行 ---
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
+
