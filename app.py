@@ -89,12 +89,11 @@ def get_jst_today():
     return datetime.now(pytz.timezone('Asia/Tokyo')).date()
 
 # ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
-# --- 4. 履歴計算のためのヘルパー関数 ---
+# --- 4. 履歴計算とデータ整理のためのヘルパー関数 ---
 # ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
 def update_summary(user_id):
     today = get_jst_today()
     
-    # 平均マス数を計算
     grids_by_date = db.session.query(
         func.sum(SubTask.grid_count)
     ).join(MasterTask).filter(
@@ -104,7 +103,6 @@ def update_summary(user_id):
     
     average_grids = sum(g[0] for g in grids_by_date) / len(grids_by_date) if grids_by_date else 0.0
 
-    # ストリーク日数を計算
     completed_dates = db.session.query(
         SubTask.completion_date
     ).join(MasterTask).filter(
@@ -124,7 +122,6 @@ def update_summary(user_id):
                 streak += 1
                 check_date -= timedelta(days=1)
 
-    # サマリーをDBに保存
     summary = DailySummary.query.filter_by(user_id=user_id, summary_date=today).first()
     if not summary:
         summary = DailySummary(user_id=user_id, summary_date=today)
@@ -132,7 +129,32 @@ def update_summary(user_id):
     summary.streak, summary.average_grids = streak, round(average_grids, 2)
     db.session.commit()
 
-# --- 5. 認証・ログイン関連のルート ---
+def cleanup_old_tasks(user_id):
+    cleanup_threshold = get_jst_today() - timedelta(days=32)
+    old_tasks_query = SubTask.query.join(MasterTask).filter(
+        MasterTask.user_id == user_id,
+        SubTask.is_completed == True,
+        SubTask.completion_date < cleanup_threshold
+    )
+    deleted_count = old_tasks_query.count()
+    if deleted_count > 0:
+        old_tasks_query.delete(synchronize_session=False)
+        db.session.commit()
+        print(f"Deleted {deleted_count} old tasks for user {user_id}.")
+
+# ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+# --- 5. 【重要】手動データベース初期化ルート ---
+# ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+@app.route('/init-db/<secret_key>')
+def init_db(secret_key):
+    if secret_key == os.environ.get("FLASK_SECRET_KEY"):
+        with app.app_context():
+            db.create_all()
+        return "データベースが初期化されました。"
+    else:
+        return "認証キーが正しくありません。", 403
+
+# --- 6. 認証・ログイン関連のルート ---
 @app.route("/")
 def index():
     return redirect(url_for("todo_list"))
@@ -201,11 +223,13 @@ def settings():
     sa_email = os.environ.get('SERVICE_ACCOUNT_EMAIL', '（管理者が設定してください）')
     return render_template('settings.html', sa_email=sa_email, days_until_deletion=days_until_deletion)
 
-# --- 6. Todoアプリ本体のルート ---
+# --- 7. Todoアプリ本体のルート ---
 @app.route('/todo')
 @app.route('/todo/<date_str>')
 @login_required
 def todo_list(date_str=None):
+    cleanup_old_tasks(current_user.id)
+
     if date_str is None:
         target_date = get_jst_today()
     else:
@@ -268,7 +292,6 @@ def complete_subtask_api(subtask_id):
     subtask.completion_date = get_jst_today() if subtask.is_completed else None
     db.session.commit()
     
-    # ★ タスク完了/未完了時に履歴を自動更新
     update_summary(current_user.id)
 
     return jsonify({'success': True, 'is_completed': subtask.is_completed})
@@ -297,7 +320,7 @@ def import_excel():
             flash(f'インポート処理中にエラーが発生しました: {e}', "message"); return redirect(url_for('import_excel'))
     return render_template('import.html')
 
-# --- 7. スプレッドシート連携 ---
+# --- 8. スプレッドシート連携 ---
 def get_gspread_client():
     sa_info = os.environ.get('GSPREAD_SERVICE_ACCOUNT')
     if not sa_info:
@@ -376,6 +399,7 @@ def export_to_sheet():
 
 # --- アプリの実行 ---
 if __name__ == '__main__':
+    # ローカル実行時はdb.create_all()を呼び出す
     with app.app_context():
         db.create_all()
     app.run(debug=True, port=5000)
