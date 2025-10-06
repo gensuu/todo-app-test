@@ -4,10 +4,10 @@
 {% block content %}
 <div class="row justify-content-center auth-form">
     <div class="col-md-8 col-lg-6">
-        <div class="card">
+        <!-- Spreadsheet Settings Card -->
+        <div class="card mb-4">
             <div class="card-body">
                 <h2 class="card-title text-center mb-4">スプレッドシート設定</h2>
-                
                 <div class="alert alert-secondary">
                     <h5 class="alert-heading">設定手順</h5>
                     <ol>
@@ -18,36 +18,101 @@
                         <li>スプレッドシートのURLをコピーし、下のフォームに貼り付けて保存します。</li>
                     </ol>
                 </div>
-
                 <form method="POST" action="{{ url_for('settings') }}">
                     <div class="mb-3">
                         <label for="spreadsheet_url" class="form-label">GoogleスプレッドシートURL</label>
                         <input type="url" class="form-control" id="spreadsheet_url" name="spreadsheet_url" value="{{ current_user.spreadsheet_url or '' }}" required>
                     </div>
-                    <div class="d-flex justify-content-between">
-                        <a href="{{ url_for('todo_list') }}" class="btn btn-outline-secondary">戻る</a>
-                        <button type="submit" class="btn btn-primary">保存する</button>
+                    <div class="d-flex justify-content-end">
+                        <button type="submit" name="update_url" class="btn btn-primary">URLを保存</button>
                     </div>
                 </form>
-
-                <p class="text-muted mt-4 small">
-                    <strong>注意：</strong> 完了日から32日以上経過したタスクは、アプリのトップページを開くたびにデータベースから自動的に削除されます。重要なデータは、定期的にスプレッドシートへ書き出してバックアップしてください。
-                </p>
-                
-                <!-- ▼▼▼ 次回削除日までの日数を表示 ▼▼▼ -->
-                {% if days_until_deletion is not none and days_until_deletion >= 0 %}
-                <p class="text-info mt-2 small">
-                    <i class="bi bi-info-circle-fill"></i> 最も古い完了タスクは、あと<strong>{{ days_until_deletion }}</strong>日で自動削除されます。
-                </p>
-                {% elif days_until_deletion is not none and days_until_deletion < 0 %}
-                 <p class="text-warning mt-2 small">
-                    <i class="bi bi-exclamation-triangle-fill"></i> 完了日から32日以上経過したタスクがあります。次回のアクセス時に削除されます。
-                </p>
-                {% endif %}
-                <!-- ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ -->
             </div>
+        </div>
+
+        <!-- Password Change Card -->
+        <div class="card">
+            <div class="card-body">
+                <h2 class="card-title text-center mb-4">パスワード変更</h2>
+                <form method="POST" action="{{ url_for('settings') }}">
+                    <div class="mb-3">
+                        <label for="current_password" class="form-label">現在のパスワード</label>
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="current_password" name="current_password" required>
+                            <button class="btn btn-outline-secondary" type="button" id="toggleCurrentPassword">
+                                <i class="bi bi-eye-fill"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="new_password" class="form-label">新しいパスワード</label>
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="new_password" name="new_password" required>
+                            <button class="btn btn-outline-secondary" type="button" id="toggleNewPassword">
+                                <i class="bi bi-eye-fill"></i>
+                            </button>
+                        </div>
+                    </div>
+                     <div class="mb-3">
+                        <label for="confirm_password" class="form-label">新しいパスワード（確認）</label>
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                            <button class="btn btn-outline-secondary" type="button" id="toggleConfirmPassword">
+                                <i class="bi bi-eye-fill"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-end">
+                        <button type="submit" name="change_password" class="btn btn-primary">パスワードを変更</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <p class="text-muted mt-4 small">
+            <strong>注意：</strong> 完了日から32日以上経過したタスクは、アプリのトップページを開くたびにデータベースから自動的に削除されます。重要なデータは、定期的にスプレッドシートへ書き出してバックアップしてください。
+        </p>
+        {% if days_until_deletion is not none and days_until_deletion >= 0 %}
+        <p class="text-info mt-2 small">
+            <i class="bi bi-info-circle-fill"></i> 最も古い完了タスクは、あと<strong>{{ days_until_deletion }}</strong>日で自動削除されます。
+        </p>
+        {% elif days_until_deletion is not none and days_until_deletion < 0 %}
+         <p class="text-warning mt-2 small">
+            <i class="bi bi-exclamation-triangle-fill"></i> 完了日から32日以上経過したタスクがあります。次回のアクセス時に削除されます。
+        </p>
+        {% endif %}
+
+        <div class="text-center mt-4">
+            <a href="{{ url_for('todo_list') }}" class="btn btn-outline-secondary">戻る</a>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function setupPasswordToggle(inputId, buttonId) {
+        const toggleButton = document.getElementById(buttonId);
+        const passwordInput = document.getElementById(inputId);
+        if (!toggleButton || !passwordInput) return;
+
+        toggleButton.addEventListener('click', function () {
+            // toggle the type attribute
+            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordInput.setAttribute('type', type);
+            
+            // toggle the eye icon
+            const icon = this.querySelector('i');
+            icon.classList.toggle('bi-eye-fill');
+            icon.classList.toggle('bi-eye-slash-fill');
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        setupPasswordToggle('current_password', 'toggleCurrentPassword');
+        setupPasswordToggle('new_password', 'toggleNewPassword');
+        setupPasswordToggle('confirm_password', 'toggleConfirmPassword');
+    });
+</script>
 {% endblock %}
 

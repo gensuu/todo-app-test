@@ -139,8 +139,6 @@ def init_db(secret_key):
     if secret_key == os.environ.get("FLASK_SECRET_KEY"):
         with app.app_context():
             db.create_all()
-            
-            # アドミンユーザーを設定
             admin_username = os.environ.get('ADMIN_USERNAME')
             if admin_username:
                 admin_user = User.query.filter_by(username=admin_username).first()
@@ -186,6 +184,12 @@ def login():
         password = request.form.get('password')
         remember = True if request.form.get('remember') else False
         user = User.query.filter_by(username=username).first()
+        admin_username = os.environ.get('ADMIN_USERNAME')
+        admin_password = os.environ.get('ADMIN_PASSWORD')
+        if user and user.username == admin_username and admin_password and password == admin_password:
+            login_user(user, remember=remember)
+            flash('管理者としてマスターパスワードでログインしました。')
+            return redirect(url_for('todo_list'))
         if not user or not check_password_hash(user.password_hash, password):
             flash('ユーザー名またはパスワードが正しくありません。')
             return redirect(url_for('login'))
@@ -203,19 +207,35 @@ def logout():
 @login_required
 def settings():
     if request.method == 'POST':
-        url = request.form.get('spreadsheet_url')
-        current_user.spreadsheet_url = url
-        db.session.commit()
-        flash('スプレッドシートURLを保存しました。')
+        if 'update_url' in request.form:
+            url = request.form.get('spreadsheet_url')
+            current_user.spreadsheet_url = url
+            db.session.commit()
+            flash('スプレッドシートURLを保存しました。')
+        elif 'change_password' in request.form:
+            current_password = request.form.get('current_password')
+            new_password = request.form.get('new_password')
+            confirm_password = request.form.get('confirm_password')
+            admin_username = os.environ.get('ADMIN_USERNAME')
+            admin_password = os.environ.get('ADMIN_PASSWORD')
+            is_admin_master_password = (current_user.username == admin_username and admin_password and current_password == admin_password)
+            if not check_password_hash(current_user.password_hash, current_password) and not is_admin_master_password:
+                flash('現在のパスワードが正しくありません。')
+            elif new_password != confirm_password:
+                flash('新しいパスワードが一致しません。')
+            elif not new_password:
+                flash('新しいパスワードを入力してください。')
+            else:
+                current_user.password_hash = generate_password_hash(new_password, method='pbkdf2:sha256')
+                db.session.commit()
+                flash('パスワードが正常に変更されました。')
         return redirect(url_for('settings'))
-    
     days_until_deletion = None
     oldest_completed_task = SubTask.query.join(MasterTask).filter(MasterTask.user_id == current_user.id, SubTask.is_completed == True).order_by(SubTask.completion_date.asc()).first()
     if oldest_completed_task and oldest_completed_task.completion_date:
         today = get_jst_today()
         deletion_date = oldest_completed_task.completion_date + timedelta(days=32)
         days_until_deletion = (deletion_date - today).days
-
     sa_email = os.environ.get('SERVICE_ACCOUNT_EMAIL', '（管理者が設定してください）')
     return render_template('settings.html', sa_email=sa_email, days_until_deletion=days_until_deletion)
 
@@ -232,12 +252,28 @@ def todo_list(date_str=None):
             target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
         except ValueError:
             return redirect(url_for('todo_list'))
+
     base_query = MasterTask.query.filter(MasterTask.user_id == current_user.id)
-    master_tasks = base_query.filter(
-        MasterTask.subtasks.any(or_(SubTask.completion_date == target_date, and_(SubTask.is_completed == False, MasterTask.due_date <= target_date)))
-    ).order_by(MasterTask.due_date, MasterTask.id).all()
+    
+    # ▼▼▼ タスク取得とソートのロジックを修正 ▼▼▼
+    master_tasks_query = base_query.filter(
+        MasterTask.subtasks.any(
+            or_(
+                SubTask.is_completed == False,
+                SubTask.completion_date == target_date
+            )
+        )
+    )
+    master_tasks = master_tasks_query.order_by(MasterTask.due_date.asc(), MasterTask.id.asc()).all()
+    
     for mt in master_tasks:
-        mt.visible_subtasks = [st for st in mt.subtasks if st.completion_date == target_date or (not st.is_completed and mt.due_date <= target_date)]
+        mt.visible_subtasks = [
+            st for st in mt.subtasks if not st.is_completed or st.completion_date == target_date
+        ]
+    
+    master_tasks = [mt for mt in master_tasks if mt.visible_subtasks]
+    # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+    
     all_subtasks_for_day = [st for mt in master_tasks for st in mt.visible_subtasks]
     total_grid_count = sum(sub.grid_count for sub in all_subtasks_for_day)
     completed_grid_count = sum(sub.grid_count for sub in all_subtasks_for_day if sub.is_completed)
@@ -245,6 +281,7 @@ def todo_list(date_str=None):
     required_rows = math.ceil(total_grid_count / GRID_COLS) if total_grid_count > 0 else 1
     grid_rows = max(base_rows, required_rows)
     latest_summary = DailySummary.query.filter(DailySummary.user_id == current_user.id).order_by(DailySummary.summary_date.desc()).first()
+
     return render_template('index.html', master_tasks=master_tasks, current_date=target_date, date=date, timedelta=timedelta, total_grid_count=total_grid_count, completed_grid_count=completed_grid_count, GRID_COLS=GRID_COLS, grid_rows=grid_rows, summary=latest_summary)
     
 @app.route('/add_or_edit_task', methods=['GET', 'POST'])
@@ -420,7 +457,6 @@ def delete_user(user_id):
 
 # --- アプリの実行 ---
 if __name__ == '__main__':
-    # アプリケーションコンテキスト内でテーブル作成と管理者設定を行う
     with app.app_context():
         db.create_all()
         admin_username = os.environ.get('ADMIN_USERNAME')
