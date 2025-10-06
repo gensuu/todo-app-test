@@ -50,9 +50,11 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(100), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
+    is_admin = db.Column(db.Boolean, default=False, nullable=False)
     spreadsheet_url = db.Column(db.String(255), nullable=True)
     master_tasks = db.relationship('MasterTask', backref='user', lazy=True, cascade="all, delete-orphan")
     summaries = db.relationship('DailySummary', backref='user', lazy=True, cascade="all, delete-orphan")
+    task_templates = db.relationship('TaskTemplate', backref='user', lazy=True, cascade="all, delete-orphan")
 
 class MasterTask(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -76,6 +78,18 @@ class DailySummary(db.Model):
     streak = db.Column(db.Integer, default=0)
     average_grids = db.Column(db.Float, default=0.0)
 
+class TaskTemplate(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    title = db.Column(db.String(100), nullable=False)
+    subtask_templates = db.relationship('SubtaskTemplate', backref='task_template', lazy=True, cascade="all, delete-orphan")
+
+class SubtaskTemplate(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    template_id = db.Column(db.Integer, db.ForeignKey('task_template.id'), nullable=False)
+    content = db.Column(db.String(100), nullable=False)
+    grid_count = db.Column(db.Integer, default=1, nullable=False)
+
 # --- 3. ログイン管理 ---
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -88,28 +102,11 @@ def load_user(user_id):
 def get_jst_today():
     return datetime.now(pytz.timezone('Asia/Tokyo')).date()
 
-# ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
-# --- 4. 履歴計算とデータ整理のためのヘルパー関数 ---
-# ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
 def update_summary(user_id):
     today = get_jst_today()
-    
-    grids_by_date = db.session.query(
-        func.sum(SubTask.grid_count)
-    ).join(MasterTask).filter(
-        MasterTask.user_id == user_id, 
-        SubTask.is_completed == True
-    ).group_by(SubTask.completion_date).all()
-    
+    grids_by_date = db.session.query(func.sum(SubTask.grid_count)).join(MasterTask).filter(MasterTask.user_id == user_id, SubTask.is_completed == True).group_by(SubTask.completion_date).all()
     average_grids = sum(g[0] for g in grids_by_date) / len(grids_by_date) if grids_by_date else 0.0
-
-    completed_dates = db.session.query(
-        SubTask.completion_date
-    ).join(MasterTask).filter(
-        MasterTask.user_id == user_id, 
-        SubTask.is_completed == True
-    ).distinct().all()
-    
+    completed_dates = db.session.query(SubTask.completion_date).join(MasterTask).filter(MasterTask.user_id == user_id, SubTask.is_completed == True).distinct().all()
     streak = 0
     if completed_dates:
         unique_dates_set = {d[0] for d in completed_dates if d[0] is not None}
@@ -117,11 +114,9 @@ def update_summary(user_id):
         if today in unique_dates_set or (today - timedelta(days=1)) in unique_dates_set:
             if today not in unique_dates_set:
                 check_date = today - timedelta(days=1)
-            
             while check_date in unique_dates_set:
                 streak += 1
                 check_date -= timedelta(days=1)
-
     summary = DailySummary.query.filter_by(user_id=user_id, summary_date=today).first()
     if not summary:
         summary = DailySummary(user_id=user_id, summary_date=today)
@@ -131,30 +126,14 @@ def update_summary(user_id):
 
 def cleanup_old_tasks(user_id):
     cleanup_threshold = get_jst_today() - timedelta(days=32)
-    old_tasks_query = SubTask.query.join(MasterTask).filter(
-        MasterTask.user_id == user_id,
-        SubTask.is_completed == True,
-        SubTask.completion_date < cleanup_threshold
-    )
+    old_tasks_query = SubTask.query.join(MasterTask).filter(MasterTask.user_id == user_id, SubTask.is_completed == True, SubTask.completion_date < cleanup_threshold)
     deleted_count = old_tasks_query.count()
     if deleted_count > 0:
         old_tasks_query.delete(synchronize_session=False)
         db.session.commit()
         print(f"Deleted {deleted_count} old tasks for user {user_id}.")
 
-# ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
-# --- 5. 【重要】手動データベース初期化ルート ---
-# ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
-@app.route('/init-db/<secret_key>')
-def init_db(secret_key):
-    if secret_key == os.environ.get("FLASK_SECRET_KEY"):
-        with app.app_context():
-            db.create_all()
-        return "データベースが初期化されました。"
-    else:
-        return "認証キーが正しくありません。", 403
-
-# --- 6. 認証・ログイン関連のルート ---
+# --- 4. 認証・ログイン関連のルート ---
 @app.route("/")
 def index():
     return redirect(url_for("todo_list"))
@@ -210,11 +189,7 @@ def settings():
         return redirect(url_for('settings'))
     
     days_until_deletion = None
-    oldest_completed_task = SubTask.query.join(MasterTask).filter(
-        MasterTask.user_id == current_user.id,
-        SubTask.is_completed == True
-    ).order_by(SubTask.completion_date.asc()).first()
-
+    oldest_completed_task = SubTask.query.join(MasterTask).filter(MasterTask.user_id == current_user.id, SubTask.is_completed == True).order_by(SubTask.completion_date.asc()).first()
     if oldest_completed_task and oldest_completed_task.completion_date:
         today = get_jst_today()
         deletion_date = oldest_completed_task.completion_date + timedelta(days=32)
@@ -223,13 +198,12 @@ def settings():
     sa_email = os.environ.get('SERVICE_ACCOUNT_EMAIL', '（管理者が設定してください）')
     return render_template('settings.html', sa_email=sa_email, days_until_deletion=days_until_deletion)
 
-# --- 7. Todoアプリ本体のルート ---
+# --- 5. Todoアプリ本体のルート ---
 @app.route('/todo')
 @app.route('/todo/<date_str>')
 @login_required
 def todo_list(date_str=None):
     cleanup_old_tasks(current_user.id)
-
     if date_str is None:
         target_date = get_jst_today()
     else:
@@ -237,22 +211,19 @@ def todo_list(date_str=None):
             target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
         except ValueError:
             return redirect(url_for('todo_list'))
-
     base_query = MasterTask.query.filter(MasterTask.user_id == current_user.id)
     master_tasks = base_query.filter(
         MasterTask.subtasks.any(or_(SubTask.completion_date == target_date, and_(SubTask.is_completed == False, MasterTask.due_date <= target_date)))
     ).order_by(MasterTask.due_date, MasterTask.id).all()
-    
-    all_subtasks_for_day = [st for mt in master_tasks for st in mt.subtasks if st.completion_date == target_date or (not st.is_completed and mt.due_date <= target_date)]
+    for mt in master_tasks:
+        mt.visible_subtasks = [st for st in mt.subtasks if st.completion_date == target_date or (not st.is_completed and mt.due_date <= target_date)]
+    all_subtasks_for_day = [st for mt in master_tasks for st in mt.visible_subtasks]
     total_grid_count = sum(sub.grid_count for sub in all_subtasks_for_day)
     completed_grid_count = sum(sub.grid_count for sub in all_subtasks_for_day if sub.is_completed)
-    
     GRID_COLS, base_rows = 10, 2
     required_rows = math.ceil(total_grid_count / GRID_COLS) if total_grid_count > 0 else 1
     grid_rows = max(base_rows, required_rows)
-    
     latest_summary = DailySummary.query.filter(DailySummary.user_id == current_user.id).order_by(DailySummary.summary_date.desc()).first()
-
     return render_template('index.html', master_tasks=master_tasks, current_date=target_date, date=date, timedelta=timedelta, total_grid_count=total_grid_count, completed_grid_count=completed_grid_count, GRID_COLS=GRID_COLS, grid_rows=grid_rows, summary=latest_summary)
     
 @app.route('/add_or_edit_task', methods=['GET', 'POST'])
@@ -262,8 +233,6 @@ def add_or_edit_task(master_id=None):
     master_task = MasterTask.query.get_or_404(master_id) if master_id else None
     if master_task and master_task.user_id != current_user.id:
         flash("権限がありません。"); return redirect(url_for('todo_list'))
-
-    subtasks_for_template = [{"content": sub.content, "grid_count": sub.grid_count} for sub in (master_task.subtasks if master_task else [])]
     if request.method == 'POST':
         master_title, due_date_str = request.form.get('master_title'), request.form.get('due_date')
         due_date_obj = datetime.strptime(due_date_str, '%Y-%m-%d').date() if due_date_str else get_jst_today()
@@ -273,13 +242,16 @@ def add_or_edit_task(master_id=None):
             master_task = MasterTask(title=master_title, due_date=due_date_obj, user_id=current_user.id)
             db.session.add(master_task); db.session.flush()
         SubTask.query.filter_by(master_id=master_task.id).delete()
-        for i in range(1, 11):
+        for i in range(1, 21):
             sub_content, grid_count_str = request.form.get(f'sub_content_{i}'), request.form.get(f'grid_count_{i}', '0')
             if sub_content and grid_count_str.isdigit() and int(grid_count_str) > 0:
                 db.session.add(SubTask(master_id=master_task.id, content=sub_content, grid_count=int(grid_count_str)))
         db.session.commit()
         return redirect(url_for('todo_list', date_str=master_task.due_date.strftime('%Y-%m-%d')))
-    return render_template('edit_task.html', master_task=master_task, existing_subtasks=subtasks_for_template, date=date, get_jst_today=get_jst_today)
+    templates = TaskTemplate.query.filter_by(user_id=current_user.id).all()
+    templates_data = {t.id: {"title": t.title, "subtasks": [{"content": s.content, "grid_count": s.grid_count} for s in t.subtask_templates]} for t in templates}
+    subtasks_for_template = [{"content": sub.content, "grid_count": sub.grid_count} for sub in (master_task.subtasks if master_task else [])]
+    return render_template('edit_task.html', master_task=master_task, existing_subtasks=subtasks_for_template, date=date, get_jst_today=get_jst_today, templates=templates, templates_data=json.dumps(templates_data))
 
 @app.route('/api/complete_subtask/<int:subtask_id>', methods=['POST'])
 @login_required
@@ -287,13 +259,10 @@ def complete_subtask_api(subtask_id):
     subtask = SubTask.query.get_or_404(subtask_id)
     if subtask.master_task.user_id != current_user.id:
         return jsonify({'success': False, 'error': 'Permission denied'}), 403
-    
     subtask.is_completed = not subtask.is_completed
     subtask.completion_date = get_jst_today() if subtask.is_completed else None
     db.session.commit()
-    
     update_summary(current_user.id)
-
     return jsonify({'success': True, 'is_completed': subtask.is_completed})
 
 @app.route('/import', methods=['GET', 'POST'])
@@ -320,7 +289,38 @@ def import_excel():
             flash(f'インポート処理中にエラーが発生しました: {e}', "message"); return redirect(url_for('import_excel'))
     return render_template('import.html')
 
-# --- 8. スプレッドシート連携 ---
+# --- 7. テンプレート管理ルート ---
+@app.route('/templates', methods=['GET', 'POST'])
+@login_required
+def manage_templates():
+    if request.method == 'POST':
+        title = request.form.get('template_title')
+        if not title:
+            flash("テンプレート名を入力してください。"); return redirect(url_for('manage_templates'))
+        new_template = TaskTemplate(title=title, user_id=current_user.id)
+        db.session.add(new_template); db.session.flush()
+        for i in range(1, 21):
+            sub_content, grid_count_str = request.form.get(f'sub_content_{i}'), request.form.get(f'grid_count_{i}', '0')
+            if sub_content and grid_count_str.isdigit() and int(grid_count_str) > 0:
+                db.session.add(SubtaskTemplate(template_id=new_template.id, content=sub_content, grid_count=int(grid_count_str)))
+        db.session.commit()
+        flash(f"テンプレート「{title}」を作成しました。")
+        return redirect(url_for('manage_templates'))
+    templates = TaskTemplate.query.filter_by(user_id=current_user.id).order_by(TaskTemplate.title).all()
+    return render_template('manage_templates.html', templates=templates)
+
+@app.route('/delete_template/<int:template_id>', methods=['POST'])
+@login_required
+def delete_template(template_id):
+    template = TaskTemplate.query.get_or_404(template_id)
+    if template.user_id != current_user.id:
+        flash("権限がありません。"); return redirect(url_for('manage_templates'))
+    db.session.delete(template)
+    db.session.commit()
+    flash(f"テンプレート「{template.title}」を削除しました。")
+    return redirect(url_for('manage_templates'))
+
+# --- 8. スプレッドシート連携とデータ整理 ---
 def get_gspread_client():
     sa_info = os.environ.get('GSPREAD_SERVICE_ACCOUNT')
     if not sa_info:
@@ -340,34 +340,21 @@ def get_gspread_client():
 @login_required
 def export_to_sheet():
     if not current_user.spreadsheet_url:
-        flash("スプレッドシートURLが設定されていません。設定ページから登録してください。")
-        return redirect(url_for('todo_list'))
-
-    completed_tasks = SubTask.query.join(MasterTask).filter(
-        MasterTask.user_id == current_user.id,
-        SubTask.is_completed == True
-    ).order_by(SubTask.completion_date).all()
-
+        flash("スプレッドシートURLが設定されていません。"); return redirect(url_for('todo_list'))
+    completed_tasks = SubTask.query.join(MasterTask).filter(MasterTask.user_id == current_user.id, SubTask.is_completed == True).order_by(SubTask.completion_date).all()
     if not completed_tasks:
-        flash("書き出す完了済みタスクがありません。")
-        return redirect(url_for('todo_list'))
-    
+        flash("書き出す完了済みタスクがありません。"); return redirect(url_for('todo_list'))
     gc = get_gspread_client()
     if not gc:
-        flash("スプレッドシート認証に失敗しました。管理者設定を確認してください。")
-        return redirect(url_for('todo_list'))
-
+        flash("スプレッドシート認証に失敗しました。管理者設定を確認してください。"); return redirect(url_for('todo_list'))
     try:
         sh = gc.open_by_url(current_user.spreadsheet_url)
         worksheet = sh.sheet1
-        
         header = ['主タスクID', '主タスク', 'サブタスク内容', 'マス数', '期限日', '完了日', '遅れた日数']
         if not worksheet.row_values(1):
              worksheet.append_row(header)
-
         existing_records = worksheet.get_all_values()[1:]
         existing_keys = set( (rec[1], rec[2], rec[5]) for rec in existing_records )
-        
         data_to_append = []
         for subtask in completed_tasks:
             if not subtask.completion_date: continue
@@ -375,32 +362,51 @@ def export_to_sheet():
             if key not in existing_keys:
                 day_diff = (subtask.completion_date - subtask.master_task.due_date).days
                 data_to_append.append([
-                    subtask.master_task.id,
-                    subtask.master_task.title,
-                    subtask.content,
-                    subtask.grid_count,
-                    subtask.master_task.due_date.strftime('%Y-%m-%d'),
-                    subtask.completion_date.strftime('%Y-%m-%d'),
-                    day_diff
+                    subtask.master_task.id, subtask.master_task.title, subtask.content,
+                    subtask.grid_count, subtask.master_task.due_date.strftime('%Y-%m-%d'),
+                    subtask.completion_date.strftime('%Y-%m-%d'), day_diff
                 ])
                 existing_keys.add(key)
-        
         if data_to_append:
             worksheet.append_rows(data_to_append, value_input_option='USER_ENTERED')
-        
         flash(f"{len(data_to_append)}件の新しい完了タスクをスプレッドシートに書き出しました。")
-
     except gspread.exceptions.SpreadsheetNotFound:
-        flash("指定されたURLのスプレッドシートが見つかりません。URLを確認するか、サービスアカウントに共有されているか確認してください。")
+        flash("指定されたURLのスプレッドシートが見つかりません。")
     except Exception as e:
         flash(f"スプレッドシートへの書き込み中にエラーが発生しました: {e}")
-
     return redirect(url_for('todo_list'))
+
+# --- 9. 管理者用ルート ---
+@app.route('/admin')
+@login_required
+def admin_panel():
+    if not current_user.is_admin:
+        flash("管理者権限がありません。"); return redirect(url_for('todo_list'))
+    users = User.query.order_by(User.id).all()
+    return render_template('admin.html', users=users)
+
+@app.route('/admin/delete_user/<int:user_id>', methods=['POST'])
+@login_required
+def delete_user(user_id):
+    if not current_user.is_admin:
+        flash("管理者権限がありません。"); return redirect(url_for('todo_list'))
+    if user_id == current_user.id:
+        flash("自分自身のアカウントは削除できません。"); return redirect(url_for('admin_panel'))
+    user_to_delete = User.query.get_or_404(user_id)
+    db.session.delete(user_to_delete); db.session.commit()
+    flash(f"ユーザー「{user_to_delete.username}」を削除しました。")
+    return redirect(url_for('admin_panel'))
 
 # --- アプリの実行 ---
 if __name__ == '__main__':
-    # ローカル実行時はdb.create_all()を呼び出す
     with app.app_context():
         db.create_all()
+        admin_username = os.environ.get('ADMIN_USERNAME')
+        if admin_username:
+            admin_user = User.query.filter_by(username=admin_username).first()
+            if admin_user:
+                admin_user.is_admin = True
+                db.session.commit()
+                print(f"User '{admin_username}' set as admin.")
     app.run(debug=True, port=5000)
 

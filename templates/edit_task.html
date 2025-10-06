@@ -1,45 +1,56 @@
-{% extends "base.html" %}
+{% extends "layout.html" %}
 
 {% block title %}{% if master_task %}タスクの編集{% else %}新しいタスクの追加{% endif %}{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <main class="col-md-8 col-lg-6 main-content">
-        <header class="text-center my-4">
-            <h1>{% if master_task %}✏️ タスクの編集{% else %}➕ 新しいタスクの追加{% endif %}</h1>
-        </header>
-
-        <div class="card edit-task-card">
-            <div class="card-body">
-                <form method="post">
-                    <!-- Master Task -->
-                    <div class="mb-3">
-                        <label for="master_title" class="form-label">親タスクのタイトル</label>
-                        <input type="text" class="form-control" id="master_title" name="master_title" value="{{ master_task.title if master_task else '' }}" required>
-                    </div>
+<div class="container my-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card edit-task-card">
+                <div class="card-header">
+                    <h2>{% if master_task %}タスクの編集{% else %}新しいタスクの追加{% endif %}</h2>
+                </div>
+                <div class="card-body">
+                    {% if not master_task %}
                     <div class="mb-4">
-                        <label for="due_date" class="form-label">期限日</label>
-                        <input type="date" class="form-control" id="due_date" name="due_date" value="{{ (master_task.due_date if master_task else get_jst_today()).strftime('%Y-%m-%d') }}">
+                        <label for="template_selector" class="form-label">テンプレートから読み込む</label>
+                        <select class="form-select" id="template_selector">
+                            <option value="">テンプレートを選択...</option>
+                            {% for template in templates %}
+                                <option value="{{ template.id }}">{{ template.title }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
-                    <hr>
-                    
-                    <!-- Subtasks -->
-                    <h5 class="mb-3">サブタスク</h5>
-                    <div id="subtasks-container">
-                        <!-- JavaScript will populate this -->
-                    </div>
+                    {% endif %}
 
-                    <div class="d-grid gap-2 d-md-flex justify-content-md-between mt-4">
-                        <button type="button" id="add-subtask-btn" class="btn btn-secondary"><i class="bi bi-plus-circle"></i> サブタスクを追加</button>
-                        <div>
-                            <a href="{{ url_for('todo_list') }}" class="btn btn-outline-secondary">キャンセル</a>
-                            <button type="submit" class="btn btn-primary">保存する</button>
+                    <form method="post">
+                        <div class="mb-3">
+                            <label for="master_title" class="form-label">親タスクのタイトル</label>
+                            <input type="text" class="form-control" id="master_title" name="master_title" value="{{ master_task.title if master_task else '' }}" required>
                         </div>
-                    </div>
-                </form>
+                        <div class="mb-4">
+                            <label for="due_date" class="form-label">期限日</label>
+                            <input type="date" class="form-control" id="due_date" name="due_date" value="{{ (master_task.due_date if master_task else get_jst_today()).strftime('%Y-%m-%d') }}">
+                        </div>
+                        <hr>
+                        
+                        <h5 class="mb-3">サブタスク</h5>
+                        <div id="subtasks-container">
+                            <!-- JavaScript will populate this -->
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-between mt-4">
+                            <button type="button" id="add-subtask-btn" class="btn btn-secondary"><i class="bi bi-plus-circle"></i> サブタスクを追加</button>
+                            <div>
+                                <a href="{{ url_for('todo_list') }}" class="btn btn-outline-secondary">キャンセル</a>
+                                <button type="submit" class="btn btn-primary">保存する</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
-    </main>
+    </div>
 </div>
 {% endblock %}
 
@@ -48,29 +59,26 @@
     document.addEventListener('DOMContentLoaded', () => {
         const container = document.getElementById('subtasks-container');
         const addBtn = document.getElementById('add-subtask-btn');
-        const maxSubtasks = 10;
+        const maxSubtasks = 20;
         
-        // This is the data from Flask
+        // ★ テンプレートデータの読み込み方法を修正
+        const templatesData = {{ templates_data | safe }};
         const existingSubtasks = {{ existing_subtasks | tojson | safe }};
 
         let subtaskCounter = 0;
 
         const createSubtaskRow = (task = { content: '', grid_count: 1 }) => {
-            if (subtaskCounter >= maxSubtasks) {
-                addBtn.disabled = true;
-                return;
-            }
+            if (subtaskCounter >= maxSubtasks) return;
             subtaskCounter++;
-
             const row = document.createElement('div');
             row.classList.add('row', 'g-2', 'mb-2', 'align-items-center', 'subtask-row');
             row.innerHTML = `
                 <div class="col">
-                    <input type="text" class="form-control" name="sub_content_${subtaskCounter}" placeholder="サブタスクの内容" value="${task.content || ''}" required>
+                    <input type="text" class="form-control" name="sub_content_${subtaskCounter}" placeholder="サブタスクの内容" value="${task.content}" required>
                 </div>
-                <div class="col-3 col-md-2">
+                <div class="col-4 col-md-3">
                     <div class="input-group">
-                        <input type="number" class="form-control" name="grid_count_${subtaskCounter}" min="1" value="${task.grid_count || 1}" required>
+                        <input type="number" class="form-control" name="grid_count_${subtaskCounter}" min="1" value="${task.grid_count}" required>
                         <span class="input-group-text">マス</span>
                     </div>
                 </div>
@@ -81,30 +89,48 @@
             container.appendChild(row);
         };
         
-        // Populate with existing subtasks
-        if (existingSubtasks && existingSubtasks.length > 0) {
-            existingSubtasks.forEach(task => createSubtaskRow(task));
+        const populateSubtasks = (tasks) => {
+            container.innerHTML = ''; // 既存の行をクリア
+            subtaskCounter = 0;
+            if (tasks && tasks.length > 0) {
+                tasks.forEach(task => createSubtaskRow(task));
+            } else {
+                createSubtaskRow(); 
+            }
+        };
+
+        // 初期表示
+        if (existingSubtasks.length > 0) {
+            populateSubtasks(existingSubtasks);
         } else {
-            // Add one empty row for new tasks
             createSubtaskRow();
         }
 
-        // Add new subtask
-        addBtn.addEventListener('click', () => {
-            createSubtaskRow();
-        });
+        // --- テンプレート選択時の処理 ---
+        const templateSelector = document.getElementById('template_selector');
+        if (templateSelector) {
+            templateSelector.addEventListener('change', (e) => {
+                const templateId = e.target.value;
+                const masterTitleInput = document.getElementById('master_title');
+                
+                if (templateId && templatesData[templateId]) {
+                    const selectedTemplate = templatesData[templateId];
+                    masterTitleInput.value = selectedTemplate.title; // 親タスク名を入力
+                    populateSubtasks(selectedTemplate.subtasks); // サブタスクを入力
+                } else {
+                    masterTitleInput.value = ''; // 親タスク名をクリア
+                    populateSubtasks([]); // サブタスクをクリア
+                }
+            });
+        }
 
-        // Remove subtask
+        addBtn.addEventListener('click', () => createSubtaskRow());
         container.addEventListener('click', (e) => {
             if (e.target.closest('.remove-subtask-btn')) {
                 e.target.closest('.subtask-row').remove();
-                // We don't need to re-index, as the backend will just find the named inputs.
-                subtaskCounter--;
-                if (subtaskCounter < maxSubtasks) {
-                    addBtn.disabled = false;
-                }
             }
         });
     });
 </script>
 {% endblock %}
+

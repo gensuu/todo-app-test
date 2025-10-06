@@ -9,7 +9,9 @@
 body {
     background-color: var(--dark-bg);
     color: #f8f9fa;
-    padding-bottom: 80px; /* For mobile bottom nav */
+    /* ▼▼▼ ナビゲーションバーの高さ分、上部に余白を確保 ▼▼▼ */
+    padding-top: 56px; 
+    padding-bottom: 80px;
 }
 
 .card {
@@ -18,17 +20,47 @@ body {
     border-radius: 0.5rem;
 }
 
-/* ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ */
-/* ★ レイアウト修正のためのCSS ★ */
-/* ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ */
+/* ★ ログイン/登録フォーム用のスタイル */
+.auth-form {
+    padding-top: 5vh;
+}
+
+/* ★ ヘッダー用のスタイル */
+.app-header {
+    padding: 10px 20px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    border-bottom: 1px solid var(--dark-border);
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1030;
+    background-color: var(--dark-bg);
+}
+.user-info {
+    margin-right: 15px;
+}
+
+.flash-messages {
+    position: fixed;
+    top: 70px; /* ヘッダーの下に表示 */
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1050;
+    width: 80%;
+    max-width: 500px;
+}
+
+/* ★ レイアウト修正のためのCSS */
 .sidebar-left, .sidebar-right {
-    height: 100vh; /* 高さを画面いっぱいに */
-    position: sticky; /* スクロールに追従 */
-    top: 0; /* 上端に固定 */
-    overflow-y: auto; /* 内容がはみ出たらサイドバー内をスクロール */
+    height: calc(100vh - 56px); /* ヘッダーの高さを引く */
+    position: sticky;
+    top: 56px; /* ヘッダーの高さ分、下にずらす */
+    overflow-y: auto;
     padding-top: 20px;
 }
-/* ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ */
 
 .sidebar-title {
     font-size: 1.5rem;
@@ -39,7 +71,7 @@ body {
 .main-content {
     border-left: 1px solid var(--dark-border);
     border-right: 1px solid var(--dark-border);
-    min-height: 100vh;
+    min-height: calc(100vh - 56px);
 }
 
 /* --- Header --- */
@@ -152,7 +184,6 @@ body {
         border-left: none;
         border-right: none;
     }
-    /* スマホではサイドバーのstickyを解除 */
     .sidebar-left, .sidebar-right {
         position: static;
         height: auto;

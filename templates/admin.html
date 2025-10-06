@@ -1,0 +1,48 @@
+{% extends "layout.html" %}
+{% block title %}管理者用パネル{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+    <h2 class="mb-4">ユーザー管理</h2>
+    <div class="card">
+        <div class="card-body">
+            <table class="table table-dark table-striped">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>ユーザー名</th>
+                        <th>権限</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td>{{ user.id }}</td>
+                        <td>{{ user.username }}</td>
+                        <td>{% if user.is_admin %}<strong>アドミン</strong>{% else %}一般{% endif %}</td>
+                        <td>
+                            {% if not user.is_admin and user.id != current_user.id %}
+                                <form action="{{ url_for('delete_user', user_id=user.id) }}" method="post" onsubmit="return confirm('本当にユーザー「{{ user.username }}」を削除しますか？\nこの操作は元に戻せません。');">
+                                    <button type="submit" class="btn btn-sm btn-danger">削除</button>
+                                </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+```
+
+---
+### ## 次に行うこと【最終確認】
+1.  **ファイルの更新・作成**: 上記のファイルをすべて更新・作成してください。
+2.  **.envファイルの設定**: `.env`ファイルに、あなたをアドミンとして登録するための行を追加します。
+    ```.env
+    # (既存の内容)
+    ADMIN_USERNAME="あなたのアカウントのユーザー名"
+    
