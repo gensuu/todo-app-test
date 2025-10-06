@@ -139,6 +139,17 @@ def init_db(secret_key):
     if secret_key == os.environ.get("FLASK_SECRET_KEY"):
         with app.app_context():
             db.create_all()
+            
+            # アドミンユーザーを設定
+            admin_username = os.environ.get('ADMIN_USERNAME')
+            if admin_username:
+                admin_user = User.query.filter_by(username=admin_username).first()
+                if admin_user:
+                    admin_user.is_admin = True
+                    db.session.commit()
+                    return f"データベースが初期化され、ユーザー '{admin_username}' が管理者に設定されました。"
+                else:
+                    return f"データベースは初期化されましたが、管理者ユーザー '{admin_username}' はまだ登録されていません。先にその名前でユーザー登録してから、再度このURLにアクセスしてください。"
         return "データベースが初期化されました。"
     else:
         return "認証キーが正しくありません。", 403
@@ -197,12 +208,14 @@ def settings():
         db.session.commit()
         flash('スプレッドシートURLを保存しました。')
         return redirect(url_for('settings'))
+    
     days_until_deletion = None
     oldest_completed_task = SubTask.query.join(MasterTask).filter(MasterTask.user_id == current_user.id, SubTask.is_completed == True).order_by(SubTask.completion_date.asc()).first()
     if oldest_completed_task and oldest_completed_task.completion_date:
         today = get_jst_today()
         deletion_date = oldest_completed_task.completion_date + timedelta(days=32)
         days_until_deletion = (deletion_date - today).days
+
     sa_email = os.environ.get('SERVICE_ACCOUNT_EMAIL', '（管理者が設定してください）')
     return render_template('settings.html', sa_email=sa_email, days_until_deletion=days_until_deletion)
 
@@ -407,8 +420,8 @@ def delete_user(user_id):
 
 # --- アプリの実行 ---
 if __name__ == '__main__':
+    # アプリケーションコンテキスト内でテーブル作成と管理者設定を行う
     with app.app_context():
-        # ローカルでの起動時にのみdb.create_all()を実行
         db.create_all()
         admin_username = os.environ.get('ADMIN_USERNAME')
         if admin_username:
