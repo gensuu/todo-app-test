@@ -14,9 +14,20 @@
 <body>
 
     <div class="container-fluid">
-        <div class="row">
+        <header class="app-header">
+            {% if current_user.is_authenticated %}
+                <div class="user-info">
+                    ようこそ、 {{ current_user.name }} さん
+                </div>
+                <a href="{{ url_for('logout') }}" class="btn btn-outline-secondary btn-sm">ログアウト</a>
+            {% else %}
+                 <a href="{{ url_for('google.login') }}" class="btn btn-primary">
+                    <i class="bi bi-google"></i> Googleでログインしてデータを同期
+                </a>
+            {% endif %}
+        </header>
 
-            <!-- Left Sidebar (Desktop/Tablet) -->
+        <div class="row">
             <aside class="col-md-3 d-none d-md-block sidebar-left">
                 <div class="sidebar-sticky">
                     <h2 class="sidebar-title">メニュー</h2>
@@ -24,13 +35,11 @@
                         <a class="nav-link btn btn-primary text-start mb-2" href="{{ url_for('add_or_edit_task') }}">
                             <i class="bi bi-plus-circle-fill"></i> 新しいタスクを追加
                         </a>
-                        <!-- ▼▼▼ 古い書き出しリンクの代わりに、新しい履歴集計ボタンを配置 ▼▼▼ -->
                         <form action="{{ url_for('archive_and_cleanup') }}" method="post" class="d-grid">
-                            <button type="submit" class="btn btn-success text-start mb-2" onclick="return confirm('履歴を更新し、14日以上前の完了タスクをDBから削除します。よろしいですか？');">
+                            <button type="submit" class="btn btn-success text-start mb-2" onclick="return confirm('履歴を更新し、14日以上前の完了タスクをDBから削除します。\nGoogleログイン中はスプレッドシートも更新されます。よろしいですか？');">
                                 <i class="bi bi-archive-fill"></i> 履歴の集計と整理
                             </button>
                         </form>
-                        <!-- ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ -->
                         <a class="nav-link btn btn-outline-secondary text-start" href="{{ url_for('import_excel') }}">
                             <i class="bi bi-file-earmark-arrow-up"></i> Excelからインポート
                         </a>
@@ -38,16 +47,21 @@
                 </div>
             </aside>
 
-            <!-- Main Content -->
             <main class="col-md-6 col-lg-6 main-content">
                 
-                {% with messages = get_flashed_messages() %}
+                <!-- ▼▼▼ フラッシュメッセージ表示エリアを修正 ▼▼▼ -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
                     {% if messages %}
-                        <div class="alert alert-info" role="alert">
-                            {{ messages[0] }}
-                        </div>
+                        {% for category, message in messages %}
+                            {% if category == 'message' %}
+                                <div class="alert alert-info" role="alert">{{ message }}</div>
+                            {% elif category == 'debug' %}
+                                <div class="alert alert-warning" role="alert">{{ message }}</div>
+                            {% endif %}
+                        {% endfor %}
                     {% endif %}
                 {% endwith %}
+                <!-- ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ -->
 
                 <header class="text-center my-4">
                     <h1>🗓️ Todoリスト</h1>
@@ -148,15 +162,12 @@
     <nav class="d-md-none navbar fixed-bottom navbar-dark bg-dark">
         <div class="container-fluid justify-content-around">
             <a href="{{ url_for('add_or_edit_task') }}" class="btn btn-primary"><i class="bi bi-plus-circle-fill"></i> 新タスク</a>
-            <!-- ▼▼▼ こちらも新しいボタンに置き換え ▼▼▼ -->
             <form action="{{ url_for('archive_and_cleanup') }}" method="post" class="d-grid">
-                <button type="submit" class="btn btn-success"><i class="bi bi-archive-fill"></i> 整理</button>
+                <button type="submit" class="btn btn-success" onclick="return confirm('履歴を更新し、14日以上前の完了タスクをDBから削除します。\nGoogleログイン中はスプレッドシートも更新されます。よろしいですか？');"><i class="bi bi-archive-fill"></i> 整理</button>
             </form>
-            <!-- ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ -->
             <a href="{{ url_for('import_excel') }}" class="btn btn-outline-secondary"><i class="bi bi-file-earmark-arrow-up"></i> 読込</a>
         </div>
     </nav>
-
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>

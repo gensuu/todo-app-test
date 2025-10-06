@@ -3,173 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>グリッドTODOアプリ</title>
+    <title>Excelからインポート</title>
+    <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-
-    <div class="container-fluid">
-        <div class="row">
-
-            <aside class="col-md-3 d-none d-md-block sidebar-left">
-                <div class="sidebar-sticky">
-                    <h2 class="sidebar-title">メニュー</h2>
-                    <nav class="nav flex-column">
-                        <a class="nav-link btn btn-primary text-start mb-2" href="{{ url_for('add_or_edit_task') }}">
-                            <i class="bi bi-plus-circle-fill"></i> 新しいタスクを追加
-                        </a>
-                        <a class="nav-link btn btn-outline-secondary text-start mb-2" href="{{ url_for('export_to_sheet', date_str=current_date.strftime('%Y-%m-%d')) }}">
-                            <i class="bi bi-file-earmark-spreadsheet"></i> スプレッドシートへ書き出し
-                        </a>
-                        <a class="nav-link btn btn-outline-secondary text-start" href="{{ url_for('import_excel') }}">
-                            <i class="bi bi-file-earmark-arrow-up"></i> Excelからインポート
-                        </a>
-                    </nav>
-                </div>
-            </aside>
-
-            <main class="col-md-6 col-lg-6 main-content">
-                <header class="text-center my-4">
-                    <h1>🗓️ Todoリスト</h1>
-                    <p class="lead">{{ current_date.strftime('%Y年%m月%d日') }}</p>
-                    {% set prev_day = current_date - timedelta(days=1) %}
-                    {% set next_day = current_date + timedelta(days=1) %}
-                    <div class="date-nav">
-                        <a href="{{ url_for('todo_list', date_str=prev_day.strftime('%Y-%m-%d')) }}" class="btn btn-outline-secondary">&lt; 前日へ</a>
-                        <a href="{{ url_for('todo_list', date_str=date.today().strftime('%Y-%m-%d')) }}" class="btn btn-outline-secondary">今日に戻る</a>
-                        <a href="{{ url_for('todo_list', date_str=next_day.strftime('%Y-%m-%d')) }}" class="btn btn-outline-secondary">翌日へ &gt;</a>
-                    </div>
-                </header>
-                
-                <div class="grid-section">
-                    <button class="btn btn-secondary w-100 mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#collapseGrid" aria-expanded="true" aria-controls="collapseGrid">
-                        🟦 タスク進捗 方眼グリッド (全 {{ total_grid_count }} マス中 <span id="completed-count-display">{{ completed_grid_count }}</span> マス完了)
-                    </button>
-                    <div class="collapse show" id="collapseGrid">
-                        <div class="card card-body">
-                             <div class="new-grid-container mx-auto" style="--cols: {{ GRID_COLS }}; --rows: {{ grid_rows }};">
-                                {% for i in range(GRID_COLS * grid_rows) %}
-                                <div class="grid-bg-cell"></div>
-                                {% endfor %}
-
-                                {% if total_grid_count > 0 %}
-                                <div class="task-block-total" style="--span: {{ total_grid_count }};">
-                                    <div class="task-block-completed" style="width: {{ (completed_grid_count / total_grid_count * 100)|round }}%;"></div>
-                                </div>
-                                {% endif %}
-                            </div>
+    <div class="container my-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-6">
+                <!-- ▼▼▼ フラッシュメッセージ表示エリアを追加 ▼▼▼ -->
+                {% with messages = get_flashed_messages() %}
+                    {% if messages %}
+                        <div class="alert alert-info" role="alert">
+                            {{ messages[0] }}
                         </div>
+                    {% endif %}
+                {% endwith %}
+                <!-- ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>📄 Excelからインポート</h2>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text">
+                            以下の形式で作成したExcelファイル (.xlsx) をアップロードしてください。
+                        </p>
+                        <ul class="list-group list-group-flush mb-3">
+                            <li class="list-group-item"><strong>A列:</strong> 期限日 (YYYY-MM-DD形式)</li>
+                            <li class="list-group-item"><strong>B列:</strong> 親タスクのタイトル</li>
+                            <li class="list-group-item"><strong>C列以降:</strong> サブタスクの内容 (1セルに1サブタスク)</li>
+                        </ul>
+                        <form method="post" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label for="excel_file" class="form-label">Excelファイルを選択</label>
+                                <input class="form-control" type="file" id="excel_file" name="excel_file" accept=".xlsx" required>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <a href="{{ url_for('todo_list') }}" class="btn btn-outline-secondary">キャンセル</a>
+                                <button type="submit" class="btn btn-primary">アップロード</button>
+                            </div>
+                        </form>
                     </div>
                 </div>
-
-                <div class="task-list-container">
-                    <h2>✅ タスク一覧</h2>
-                    {% for master_task in master_tasks %}
-                        <div class="card master-task-card mb-3">
-                            <div class="card-header d-flex justify-content-between align-items-center">
-                                <span>{{ master_task.title }} ({{ master_task.due_date.strftime('%m/%d') }})</span>
-                                <a href="{{ url_for('add_or_edit_task', master_id=master_task.id) }}" class="btn btn-sm btn-outline-light">✏️ 編集</a>
-                            </div>
-                            <ul class="list-group list-group-flush">
-                                {% for subtask in master_task.subtasks %}
-                                    {% if master_task.due_date == current_date or subtask.is_completed == False %}
-                                        <li class="list-group-item sub-task d-flex align-items-center {% if subtask.is_completed %}completed{% endif %}"
-                                            data-subtask-id="{{ subtask.id }}">
-                                            <span class="complete-toggle flex-grow-1" style="cursor: pointer;">
-                                                <i class="bi {{ 'bi-check-square-fill' if subtask.is_completed else 'bi-square' }}"></i>
-                                                {{ subtask.content }} ({{ subtask.grid_count }}マス)
-                                            </span>
-                                        </li>
-                                    {% endif %}
-                                {% endfor %}
-                            </ul>
-                        </div>
-                    {% else %}
-                        <div class="card card-body text-center">
-                            <p class="mb-0">この日に表示するタスクはありません。</p>
-                        </div>
-                    {% endfor %}
-                </div>
-            </main>
-
-            <aside class="col-md-3 d-none d-md-block sidebar-right">
-                <div class="sidebar-sticky">
-                    <h2 class="sidebar-title">サマリー</h2>
-                    <div class="card summary-card text-center">
-                        <div class="card-body">
-                            <h5 class="card-title">今日の進捗</h5>
-                            <div class="progress-circle" data-progress="{{ (completed_grid_count / total_grid_count * 100) if total_grid_count > 0 else 0 }}">
-                                <span class="progress-text"></span>
-                            </div>
-                            <hr>
-                            <h5 class="card-title mt-4">統計</h5>
-                            <ul class="list-unstyled">
-                                <li><strong>ストリーク</strong>: - 日 (履歴機能で実装)</li>
-                                <li><strong>平均集中マス数</strong>: - マス (履歴機能で実装)</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-            </aside>
-
+            </div>
         </div>
     </div>
-    
-    <nav class="d-md-none navbar fixed-bottom navbar-dark bg-dark">
-        <div class="container-fluid justify-content-around">
-            <a href="{{ url_for('add_or_edit_task') }}" class="btn btn-primary"><i class="bi bi-plus-circle-fill"></i> 新タスク</a>
-            <a href="{{ url_for('export_to_sheet', date_str=current_date.strftime('%Y-%m-%d')) }}" class="btn btn-outline-secondary"><i class="bi bi-file-earmark-spreadsheet"></i> 書き出し</a>
-            <a href="{{ url_for('import_excel') }}" class="btn btn-outline-secondary"><i class="bi bi-file-earmark-arrow-up"></i> 読込</a>
-        </div>
-    </nav>
-
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <script>
-    document.addEventListener('DOMContentLoaded', () => {
-        // --- 1. Task Completion Toggle ---
-        document.querySelectorAll('.complete-toggle').forEach(toggle => {
-            toggle.addEventListener('click', async () => {
-                const listItem = toggle.closest('li');
-                const subtaskId = listItem.dataset.subtaskId;
-                
-                try {
-                    const response = await fetch(`/api/complete_subtask/${subtaskId}`, { method: 'POST' });
-                    if (!response.ok) throw new Error('Network response was not ok');
-                    
-                    const data = await response.json();
-                    
-                    // 完了状態が変更されたら、ページをリロードして表示を正しく更新する
-                    location.reload();
-
-                } catch (error) {
-                    console.error('タスク更新エラー:', error);
-                    alert('タスクの更新に失敗しました。');
-                }
-            });
-        });
-
-        // --- 2. Circular Progress Bar Update Function ---
-        const circle = document.querySelector('.progress-circle');
-        function updateProgressCircle() {
-            if (circle) {
-                const totalGridCount = {{ total_grid_count or 0 }};
-                const completedGridCount = {{ completed_grid_count or 0 }};
-                
-                let progress = totalGridCount > 0 ? Math.round((completedGridCount / totalGridCount) * 100) : 0;
-                
-                circle.dataset.progress = progress;
-                circle.querySelector('.progress-text').textContent = `${progress}%`;
-                circle.style.setProperty('--progress', `${progress}%`);
-            }
-        }
-        
-        // Initial call
-        updateProgressCircle();
-    });
-    </script>
 </body>
 </html>

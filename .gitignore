@@ -12,3 +12,6 @@ service_account.json
 
 # Backup files
 static/back up style.css
+
+# Environment variables
+.env

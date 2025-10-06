@@ -1,107 +1,110 @@
-<!DOCTYPE html>
-<html lang="ja" data-bs-theme="dark">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% if master_task %}タスクの編集{% else %}新しいタスクの追加{% endif %}</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-    <div class="container my-5">
-        <div class="row justify-content-center">
-            <div class="col-lg-8">
-                <div class="card edit-task-card">
-                    <div class="card-header">
-                        <h2>{% if master_task %}タスクの編集{% else %}新しいタスクの追加{% endif %}</h2>
+{% extends "base.html" %}
+
+{% block title %}{% if master_task %}タスクの編集{% else %}新しいタスクの追加{% endif %}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <main class="col-md-8 col-lg-6 main-content">
+        <header class="text-center my-4">
+            <h1>{% if master_task %}✏️ タスクの編集{% else %}➕ 新しいタスクの追加{% endif %}</h1>
+        </header>
+
+        <div class="card edit-task-card">
+            <div class="card-body">
+                <form method="post">
+                    <!-- Master Task -->
+                    <div class="mb-3">
+                        <label for="master_title" class="form-label">親タスクのタイトル</label>
+                        <input type="text" class="form-control" id="master_title" name="master_title" value="{{ master_task.title if master_task else '' }}" required>
                     </div>
-                    <div class="card-body">
-                        <form method="post">
-                            <div class="mb-3">
-                                <label for="master_title" class="form-label">親タスクのタイトル</label>
-                                <input type="text" class="form-control" id="master_title" name="master_title" value="{{ master_task.title if master_task else '' }}" required>
-                            </div>
-                            <div class="mb-4">
-                                <label for="due_date" class="form-label">期限日</label>
-                                <input type="date" class="form-control" id="due_date" name="due_date" value="{{ (master_task.due_date if master_task else date.today()).strftime('%Y-%m-%d') }}">
-                            </div>
-                            <hr>
-                            
-                            <h5 class="mb-3">サブタスク</h5>
-                            <div id="subtasks-container">
-                                </div>
-
-                            <div class="d-grid gap-2 d-md-flex justify-content-md-between mt-4">
-                                <button type="button" id="add-subtask-btn" class="btn btn-secondary"><i class="bi bi-plus-circle"></i> サブタスクを追加</button>
-                                <div>
-                                    <a href="{{ url_for('todo_list') }}" class="btn btn-outline-secondary">キャンセル</a>
-                                    <button type="submit" class="btn btn-primary">保存する</button>
-                                </div>
-                            </div>
-                        </form>
+                    <div class="mb-4">
+                        <label for="due_date" class="form-label">期限日</label>
+                        <input type="date" class="form-control" id="due_date" name="due_date" value="{{ (master_task.due_date if master_task else get_jst_today()).strftime('%Y-%m-%d') }}">
                     </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const container = document.getElementById('subtasks-container');
-            const addBtn = document.getElementById('add-subtask-btn');
-            const maxSubtasks = 10;
-            
-            // This is the data from Flask
-            const existingSubtasks = {{ existing_subtasks | tojson | safe }};
-
-            let subtaskCounter = 0;
-
-            const createSubtaskRow = (task = { content: '', grid_count: 1 }) => {
-                if (subtaskCounter >= maxSubtasks) return;
-                subtaskCounter++;
-
-                const row = document.createElement('div');
-                row.classList.add('row', 'g-2', 'mb-2', 'align-items-center', 'subtask-row');
-                row.innerHTML = `
-                    <div class="col">
-                        <input type="text" class="form-control" name="sub_content_${subtaskCounter}" placeholder="サブタスクの内容" value="${task.content}" required>
+                    <hr>
+                    
+                    <!-- Subtasks -->
+                    <h5 class="mb-3">サブタスク</h5>
+                    <div id="subtasks-container">
+                        <!-- JavaScript will populate this -->
                     </div>
-                    <div class="col-3 col-md-2">
-                        <div class="input-group">
-                            <input type="number" class="form-control" name="grid_count_${subtaskCounter}" min="1" value="${task.grid_count}" required>
-                            <span class="input-group-text">マス</span>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-between mt-4">
+                        <button type="button" id="add-subtask-btn" class="btn btn-secondary"><i class="bi bi-plus-circle"></i> サブタスクを追加</button>
+                        <div>
+                            <a href="{{ url_for('todo_list') }}" class="btn btn-outline-secondary">キャンセル</a>
+                            <button type="submit" class="btn btn-primary">保存する</button>
                         </div>
                     </div>
-                    <div class="col-auto">
-                        <button type="button" class="btn btn-sm btn-danger remove-subtask-btn"><i class="bi bi-trash"></i></button>
-                    </div>
-                `;
-                container.appendChild(row);
-            };
-            
-            // Populate with existing subtasks
-            if (existingSubtasks.length > 0) {
-                existingSubtasks.forEach(task => createSubtaskRow(task));
-            } else {
-                // Add one empty row for new tasks
-                createSubtaskRow();
+                </form>
+            </div>
+        </div>
+    </main>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const container = document.getElementById('subtasks-container');
+        const addBtn = document.getElementById('add-subtask-btn');
+        const maxSubtasks = 10;
+        
+        // This is the data from Flask
+        const existingSubtasks = {{ existing_subtasks | tojson | safe }};
+
+        let subtaskCounter = 0;
+
+        const createSubtaskRow = (task = { content: '', grid_count: 1 }) => {
+            if (subtaskCounter >= maxSubtasks) {
+                addBtn.disabled = true;
+                return;
             }
+            subtaskCounter++;
 
-            // Add new subtask
-            addBtn.addEventListener('click', () => {
-                createSubtaskRow();
-            });
+            const row = document.createElement('div');
+            row.classList.add('row', 'g-2', 'mb-2', 'align-items-center', 'subtask-row');
+            row.innerHTML = `
+                <div class="col">
+                    <input type="text" class="form-control" name="sub_content_${subtaskCounter}" placeholder="サブタスクの内容" value="${task.content || ''}" required>
+                </div>
+                <div class="col-3 col-md-2">
+                    <div class="input-group">
+                        <input type="number" class="form-control" name="grid_count_${subtaskCounter}" min="1" value="${task.grid_count || 1}" required>
+                        <span class="input-group-text">マス</span>
+                    </div>
+                </div>
+                <div class="col-auto">
+                    <button type="button" class="btn btn-sm btn-danger remove-subtask-btn"><i class="bi bi-trash"></i></button>
+                </div>
+            `;
+            container.appendChild(row);
+        };
+        
+        // Populate with existing subtasks
+        if (existingSubtasks && existingSubtasks.length > 0) {
+            existingSubtasks.forEach(task => createSubtaskRow(task));
+        } else {
+            // Add one empty row for new tasks
+            createSubtaskRow();
+        }
 
-            // Remove subtask
-            container.addEventListener('click', (e) => {
-                if (e.target.closest('.remove-subtask-btn')) {
-                    e.target.closest('.subtask-row').remove();
-                    // Note: This simple removal means index numbers won't be contiguous on submit,
-                    // but the Flask backend handles this correctly by checking for sub_content_1, sub_content_2, etc.
-                }
-            });
+        // Add new subtask
+        addBtn.addEventListener('click', () => {
+            createSubtaskRow();
         });
-    </script>
-</body>
-</html>
+
+        // Remove subtask
+        container.addEventListener('click', (e) => {
+            if (e.target.closest('.remove-subtask-btn')) {
+                e.target.closest('.subtask-row').remove();
+                // We don't need to re-index, as the backend will just find the named inputs.
+                subtaskCounter--;
+                if (subtaskCounter < maxSubtasks) {
+                    addBtn.disabled = false;
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

@@ -18,6 +18,19 @@ body {
     border-radius: 0.5rem;
 }
 
+/* --- Hamburger Menu --- */
+#menu-toggle-btn {
+    position: fixed;
+    top: 15px;
+    right: 15px;
+    z-index: 1100; /* Offcanvasより手前に */
+    font-size: 1.2rem;
+}
+
+.offcanvas {
+    background-color: var(--dark-card-bg);
+}
+
 /* --- Layout: Sidebars & Main Content --- */
 .sidebar-left, .sidebar-right {
     padding-top: 20px;
@@ -53,11 +66,8 @@ body {
     align-items: center;
 }
 
-/* ▼▼▼ グリッドのCSSを修正 ▼▼▼ */
-/* グリッドの左右に余白を作るためのラッパー */
 .grid-wrapper {
     width: 100%;
-    /* 左右のパディングを (100% / (列数 + 左右の余白2マス)) で計算 */
     padding: 0 calc(100% / (var(--cols, 10) + 2));
     box-sizing: border-box;
 }
@@ -65,14 +75,14 @@ body {
 .new-grid-container {
     display: grid;
     grid-template-columns: repeat(var(--cols, 10), 1fr);
-    grid-auto-rows: 1fr; /* 高さを幅に合わせる */
+    grid-auto-rows: 1fr;
     width: 100%;
     gap: 2px;
 }
 
 .grid-cell {
     width: 100%;
-    aspect-ratio: 1 / 1; /* マスを正方形に保つ */
+    aspect-ratio: 1 / 1;
     background-color: #343a40;
     box-sizing: border-box;
 }
@@ -86,7 +96,6 @@ body {
     background-color: var(--primary-color);
     outline-color: var(--primary-color);
 }
-/* ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ */
 
 
 /* --- Task List --- */
@@ -98,6 +107,11 @@ body {
 .sub-task.completed {
     text-decoration: line-through;
     color: #888;
+}
+
+.diff-days {
+    font-weight: bold;
+    color: #ffc107;
 }
 
 /* --- Right Sidebar: Summary --- */

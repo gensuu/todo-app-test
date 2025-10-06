@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}設定{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <main class="col-md-8 col-lg-6 main-content">
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <header class="text-center my-4">
+            <h1>⚙️ 設定</h1>
+        </header>
+
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Googleスプレッドシート連携</h5>
+                <p class="card-text">
+                    完了タスクの履歴を書き出すGoogleスプレッドシートの<strong>名前</strong>を入力してください。
+                </p>
+                <p class="card-text text-muted small">
+                    <strong>注意:</strong> 指定するスプレッドシートは、事前に <strong><code>{{ config.get('GSPREAD_SERVICE_ACCOUNT_EMAIL') or 'サービスアカウントのメール' }}</code></strong> と共有し、「編集者」の権限を与えておく必要があります。
+                </p>
+                <form method="post">
+                    <div class="mb-3">
+                        <label for="spreadsheet_name" class="form-label">スプレッドシート名</label>
+                        <input type="text" class="form-control" id="spreadsheet_name" name="spreadsheet_name" value="{{ current_user.spreadsheet_name or '' }}" placeholder="例: Todo Grid 完了データ" required>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('todo_list') }}" class="btn btn-outline-secondary">戻る</a>
+                        <button type="submit" class="btn btn-primary">保存する</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </main>
+</div>
+{% endblock %}
