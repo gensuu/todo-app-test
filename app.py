@@ -88,15 +88,49 @@ def load_user(user_id):
 def get_jst_today():
     return datetime.now(pytz.timezone('Asia/Tokyo')).date()
 
-# --- 4. 【新機能】手動データベース初期化ルート ---
-@app.route('/init-db/<secret_key>')
-def init_db(secret_key):
-    if secret_key == os.environ.get("FLASK_SECRET_KEY"):
-        with app.app_context():
-            db.create_all()
-        return "データベースが初期化されました。"
-    else:
-        return "認証キーが正しくありません。", 403
+# ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+# --- 4. 履歴計算のためのヘルパー関数 ---
+# ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+def update_summary(user_id):
+    today = get_jst_today()
+    
+    # 平均マス数を計算
+    grids_by_date = db.session.query(
+        func.sum(SubTask.grid_count)
+    ).join(MasterTask).filter(
+        MasterTask.user_id == user_id, 
+        SubTask.is_completed == True
+    ).group_by(SubTask.completion_date).all()
+    
+    average_grids = sum(g[0] for g in grids_by_date) / len(grids_by_date) if grids_by_date else 0.0
+
+    # ストリーク日数を計算
+    completed_dates = db.session.query(
+        SubTask.completion_date
+    ).join(MasterTask).filter(
+        MasterTask.user_id == user_id, 
+        SubTask.is_completed == True
+    ).distinct().all()
+    
+    streak = 0
+    if completed_dates:
+        unique_dates_set = {d[0] for d in completed_dates if d[0] is not None}
+        check_date = today
+        if today in unique_dates_set or (today - timedelta(days=1)) in unique_dates_set:
+            if today not in unique_dates_set:
+                check_date = today - timedelta(days=1)
+            
+            while check_date in unique_dates_set:
+                streak += 1
+                check_date -= timedelta(days=1)
+
+    # サマリーをDBに保存
+    summary = DailySummary.query.filter_by(user_id=user_id, summary_date=today).first()
+    if not summary:
+        summary = DailySummary(user_id=user_id, summary_date=today)
+        db.session.add(summary)
+    summary.streak, summary.average_grids = streak, round(average_grids, 2)
+    db.session.commit()
 
 # --- 5. 認証・ログイン関連のルート ---
 @app.route("/")
@@ -153,7 +187,6 @@ def settings():
         flash('スプレッドシートURLを保存しました。')
         return redirect(url_for('settings'))
     
-    # ▼▼▼ 次回削除までの日数を計算 ▼▼▼
     days_until_deletion = None
     oldest_completed_task = SubTask.query.join(MasterTask).filter(
         MasterTask.user_id == current_user.id,
@@ -164,10 +197,8 @@ def settings():
         today = get_jst_today()
         deletion_date = oldest_completed_task.completion_date + timedelta(days=32)
         days_until_deletion = (deletion_date - today).days
-    # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
     sa_email = os.environ.get('SERVICE_ACCOUNT_EMAIL', '（管理者が設定してください）')
-    # ★ テンプレートに days_until_deletion を渡す
     return render_template('settings.html', sa_email=sa_email, days_until_deletion=days_until_deletion)
 
 # --- 6. Todoアプリ本体のルート ---
@@ -232,9 +263,14 @@ def complete_subtask_api(subtask_id):
     subtask = SubTask.query.get_or_404(subtask_id)
     if subtask.master_task.user_id != current_user.id:
         return jsonify({'success': False, 'error': 'Permission denied'}), 403
+    
     subtask.is_completed = not subtask.is_completed
     subtask.completion_date = get_jst_today() if subtask.is_completed else None
     db.session.commit()
+    
+    # ★ タスク完了/未完了時に履歴を自動更新
+    update_summary(current_user.id)
+
     return jsonify({'success': True, 'is_completed': subtask.is_completed})
 
 @app.route('/import', methods=['GET', 'POST'])
@@ -261,7 +297,7 @@ def import_excel():
             flash(f'インポート処理中にエラーが発生しました: {e}', "message"); return redirect(url_for('import_excel'))
     return render_template('import.html')
 
-# --- 7. スプレッドシート連携とデータ整理 ---
+# --- 7. スプレッドシート連携 ---
 def get_gspread_client():
     sa_info = os.environ.get('GSPREAD_SERVICE_ACCOUNT')
     if not sa_info:
@@ -340,5 +376,7 @@ def export_to_sheet():
 
 # --- アプリの実行 ---
 if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
     app.run(debug=True, port=5000)
 
