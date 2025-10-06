@@ -133,7 +133,17 @@ def cleanup_old_tasks(user_id):
         db.session.commit()
         print(f"Deleted {deleted_count} old tasks for user {user_id}.")
 
-# --- 4. 認証・ログイン関連のルート ---
+# --- 4. 【重要】手動データベース初期化ルート ---
+@app.route('/init-db/<secret_key>')
+def init_db(secret_key):
+    if secret_key == os.environ.get("FLASK_SECRET_KEY"):
+        with app.app_context():
+            db.create_all()
+        return "データベースが初期化されました。"
+    else:
+        return "認証キーが正しくありません。", 403
+
+# --- 5. 認証・ログイン関連のルート ---
 @app.route("/")
 def index():
     return redirect(url_for("todo_list"))
@@ -187,18 +197,16 @@ def settings():
         db.session.commit()
         flash('スプレッドシートURLを保存しました。')
         return redirect(url_for('settings'))
-    
     days_until_deletion = None
     oldest_completed_task = SubTask.query.join(MasterTask).filter(MasterTask.user_id == current_user.id, SubTask.is_completed == True).order_by(SubTask.completion_date.asc()).first()
     if oldest_completed_task and oldest_completed_task.completion_date:
         today = get_jst_today()
         deletion_date = oldest_completed_task.completion_date + timedelta(days=32)
         days_until_deletion = (deletion_date - today).days
-
     sa_email = os.environ.get('SERVICE_ACCOUNT_EMAIL', '（管理者が設定してください）')
     return render_template('settings.html', sa_email=sa_email, days_until_deletion=days_until_deletion)
 
-# --- 5. Todoアプリ本体のルート ---
+# --- 6. Todoアプリ本体のルート ---
 @app.route('/todo')
 @app.route('/todo/<date_str>')
 @login_required
@@ -288,7 +296,7 @@ def import_excel():
         except Exception as e:
             flash(f'インポート処理中にエラーが発生しました: {e}', "message"); return redirect(url_for('import_excel'))
     return render_template('import.html')
-
+    
 # --- 7. テンプレート管理ルート ---
 @app.route('/templates', methods=['GET', 'POST'])
 @login_required
@@ -400,6 +408,7 @@ def delete_user(user_id):
 # --- アプリの実行 ---
 if __name__ == '__main__':
     with app.app_context():
+        # ローカルでの起動時にのみdb.create_all()を実行
         db.create_all()
         admin_username = os.environ.get('ADMIN_USERNAME')
         if admin_username:
