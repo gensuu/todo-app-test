@@ -18,28 +18,17 @@ body {
     border-radius: 0.5rem;
 }
 
-/* --- Hamburger Menu --- */
-#menu-toggle-btn {
-    position: fixed;
-    top: 15px;
-    right: 15px;
-    z-index: 1100; /* Offcanvasより手前に */
-    font-size: 1.2rem;
-}
-
-.offcanvas {
-    background-color: var(--dark-card-bg);
-}
-
-/* --- Layout: Sidebars & Main Content --- */
+/* ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ */
+/* ★ レイアウト修正のためのCSS ★ */
+/* ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ */
 .sidebar-left, .sidebar-right {
+    height: 100vh; /* 高さを画面いっぱいに */
+    position: sticky; /* スクロールに追従 */
+    top: 0; /* 上端に固定 */
+    overflow-y: auto; /* 内容がはみ出たらサイドバー内をスクロール */
     padding-top: 20px;
 }
-
-.sidebar-sticky {
-    position: sticky;
-    top: 20px;
-}
+/* ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ */
 
 .sidebar-title {
     font-size: 1.5rem;
@@ -162,6 +151,11 @@ body {
     .main-content {
         border-left: none;
         border-right: none;
+    }
+    /* スマホではサイドバーのstickyを解除 */
+    .sidebar-left, .sidebar-right {
+        position: static;
+        height: auto;
     }
 }
 

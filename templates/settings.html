@@ -1,47 +1,53 @@
-{% extends "base.html" %}
-
+{% extends "layout.html" %}
 {% block title %}設定{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <main class="col-md-8 col-lg-6 main-content">
-        
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-
-        <header class="text-center my-4">
-            <h1>⚙️ 設定</h1>
-        </header>
-
+<div class="row justify-content-center auth-form">
+    <div class="col-md-8 col-lg-6">
         <div class="card">
             <div class="card-body">
-                <h5 class="card-title">Googleスプレッドシート連携</h5>
-                <p class="card-text">
-                    完了タスクの履歴を書き出すGoogleスプレッドシートの<strong>名前</strong>を入力してください。
-                </p>
-                <p class="card-text text-muted small">
-                    <strong>注意:</strong> 指定するスプレッドシートは、事前に <strong><code>{{ config.get('GSPREAD_SERVICE_ACCOUNT_EMAIL') or 'サービスアカウントのメール' }}</code></strong> と共有し、「編集者」の権限を与えておく必要があります。
-                </p>
-                <form method="post">
+                <h2 class="card-title text-center mb-4">スプレッドシート設定</h2>
+                
+                <div class="alert alert-secondary">
+                    <h5 class="alert-heading">設定手順</h5>
+                    <ol>
+                        <li>ご自身のGoogleアカウントで、書き出し先として使いたいGoogleスプレッドシートを新規作成します。</li>
+                        <li>作成したスプレッドシートの「共有」ボタンを押し、以下のサービスアカウントのメールアドレスを「<strong>編集者</strong>」として追加します。<br>
+                            <code class="user-select-all">{{ sa_email }}</code>
+                        </li>
+                        <li>スプレッドシートのURLをコピーし、下のフォームに貼り付けて保存します。</li>
+                    </ol>
+                </div>
+
+                <form method="POST" action="{{ url_for('settings') }}">
                     <div class="mb-3">
-                        <label for="spreadsheet_name" class="form-label">スプレッドシート名</label>
-                        <input type="text" class="form-control" id="spreadsheet_name" name="spreadsheet_name" value="{{ current_user.spreadsheet_name or '' }}" placeholder="例: Todo Grid 完了データ" required>
+                        <label for="spreadsheet_url" class="form-label">GoogleスプレッドシートURL</label>
+                        <input type="url" class="form-control" id="spreadsheet_url" name="spreadsheet_url" value="{{ current_user.spreadsheet_url or '' }}" required>
                     </div>
                     <div class="d-flex justify-content-between">
                         <a href="{{ url_for('todo_list') }}" class="btn btn-outline-secondary">戻る</a>
                         <button type="submit" class="btn btn-primary">保存する</button>
                     </div>
                 </form>
+
+                <p class="text-muted mt-4 small">
+                    <strong>注意：</strong> 完了日から32日以上経過したタスクは、アプリのトップページを開くたびにデータベースから自動的に削除されます。重要なデータは、定期的にスプレッドシートへ書き出してバックアップしてください。
+                </p>
+                
+                <!-- ▼▼▼ 次回削除日までの日数を表示 ▼▼▼ -->
+                {% if days_until_deletion is not none and days_until_deletion >= 0 %}
+                <p class="text-info mt-2 small">
+                    <i class="bi bi-info-circle-fill"></i> 最も古い完了タスクは、あと<strong>{{ days_until_deletion }}</strong>日で自動削除されます。
+                </p>
+                {% elif days_until_deletion is not none and days_until_deletion < 0 %}
+                 <p class="text-warning mt-2 small">
+                    <i class="bi bi-exclamation-triangle-fill"></i> 完了日から32日以上経過したタスクがあります。次回のアクセス時に削除されます。
+                </p>
+                {% endif %}
+                <!-- ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ -->
             </div>
         </div>
-    </main>
+    </div>
 </div>
 {% endblock %}
+
