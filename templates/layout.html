@@ -24,13 +24,11 @@
                 </div>
                 <div class="offcanvas-body">
                     <ul class="navbar-nav justify-content-end flex-grow-1 pe-3">
-                        <!-- ▼▼▼ アドミン専用リンクを追加 ▼▼▼ -->
                         {% if current_user.is_admin %}
                         <li class="nav-item">
                             <a class="nav-link" href="{{ url_for('admin_panel') }}"><i class="bi bi-person-badge-fill me-2"></i>管理者用パネル</a>
                         </li>
                         {% endif %}
-                        <!-- ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ -->
                         <li class="nav-item">
                             <a class="nav-link" href="{{ url_for('settings') }}"><i class="bi bi-gear-fill me-2"></i>設定</a>
                         </li>

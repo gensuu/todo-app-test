@@ -4,12 +4,13 @@
     --dark-card-bg: #2b3035;
     --dark-border: #444;
     --primary-color: #6a5acd; /* ラベンダー */
+    --today-color: #a1882d; /* 彩度を抑えた黄色 */
+    --dot-color: #b89b4b;
 }
 
 body {
     background-color: var(--dark-bg);
     color: #f8f9fa;
-    /* ▼▼▼ ナビゲーションバーの高さ分、上部に余白を確保 ▼▼▼ */
     padding-top: 56px; 
     padding-bottom: 80px;
 }
@@ -20,12 +21,7 @@ body {
     border-radius: 0.5rem;
 }
 
-/* ★ ログイン/登録フォーム用のスタイル */
-.auth-form {
-    padding-top: 5vh;
-}
-
-/* ★ ヘッダー用のスタイル */
+/* --- Header & Layout --- */
 .app-header {
     padding: 10px 20px;
     display: flex;
@@ -39,25 +35,35 @@ body {
     z-index: 1030;
     background-color: var(--dark-bg);
 }
+
 .user-info {
     margin-right: 15px;
 }
 
+.main-container {
+    padding-top: 20px;
+}
+
+/* --- Auth & Flash Messages --- */
+.auth-form {
+    padding-top: 5vh;
+}
+
 .flash-messages {
     position: fixed;
-    top: 70px; /* ヘッダーの下に表示 */
+    top: 70px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 1050;
-    width: 80%;
+    width: 90%;
     max-width: 500px;
 }
 
-/* ★ レイアウト修正のためのCSS */
+/* --- Layout: Sidebars & Main Content --- */
 .sidebar-left, .sidebar-right {
-    height: calc(100vh - 56px); /* ヘッダーの高さを引く */
+    height: calc(100vh - 56px);
     position: sticky;
-    top: 56px; /* ヘッダーの高さ分、下にずらす */
+    top: 56px;
     overflow-y: auto;
     padding-top: 20px;
 }
@@ -74,7 +80,7 @@ body {
     min-height: calc(100vh - 56px);
 }
 
-/* --- Header --- */
+/* --- Header inside Main Content --- */
 .date-nav .btn {
     margin: 0 5px;
 }
@@ -118,7 +124,6 @@ body {
     outline-color: var(--primary-color);
 }
 
-
 /* --- Task List --- */
 .list-group-item {
     background-color: transparent;
@@ -135,16 +140,114 @@ body {
     color: #ffc107;
 }
 
+/* --- Right Sidebar: Calendar --- */
+.calendar-card .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.4rem 0.8rem;
+}
+
+.calendar-card .card-body {
+    padding: 0.1rem;
+}
+
+.calendar-table {
+    width: 100%;
+    table-layout: fixed;
+    border-spacing: 2px;
+    border-collapse: separate;
+}
+
+.calendar-table th {
+    text-align: center;
+    font-weight: normal;
+    font-size: 0.7rem;
+    color: #888;
+    padding-bottom: 0.2rem;
+}
+
+.calendar-table td {
+    text-align: center;
+    padding: 0;
+    vertical-align: top;
+}
+
+.calendar-table td a {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 0.85; 
+    border-radius: 4px;
+    text-decoration: none;
+    color: #f8f9fa;
+    transition: background-color 0.2s;
+    background-color: #343a40;
+    position: relative;
+}
+
+.calendar-table td a:hover {
+    background-color: #495057;
+}
+
+.calendar-table td.current-date a {
+    background-color: var(--primary-color);
+    color: white;
+    font-weight: bold;
+}
+
+.calendar-table td.today a .calendar-day-num {
+    color: var(--today-color); 
+    font-weight: bold;
+}
+
+.calendar-table td.today.current-date a {
+    box-shadow: none;
+}
+
+.calendar-table td.today.current-date a .calendar-day-num {
+    color: white;
+}
+
+.calendar-day-num {
+    position: absolute;
+    top: 2px;
+    left: 4px;
+    font-size: 0.6rem;
+}
+
+.task-dots {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2px;
+    position: absolute;
+    bottom: 3px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 10px;
+}
+
+.task-dot {
+    display: block;
+    width: 3px;
+    height: 3px;
+    background-color: var(--dot-color); 
+    border-radius: 50%;
+}
+
+.calendar-table td.current-date .task-dot {
+    background-color: white;
+}
+
 /* --- Right Sidebar: Summary --- */
 .progress-circle {
-    width: 150px;
-    height: 150px;
+    width: 120px;
+    height: 120px;
     border-radius: 50%;
     background: conic-gradient(var(--primary-color) var(--progress, 0%), #444 0);
     display: flex;
     justify-content: center;
     align-items: center;
-    margin: 20px auto;
+    margin: 10px auto;
     position: relative;
     transition: background 0.5s;
 }
@@ -160,7 +263,7 @@ body {
 
 .progress-text {
     z-index: 1;
-    font-size: 1.8rem;
+    font-size: 1.5rem;
     font-weight: bold;
 }
 
@@ -179,7 +282,10 @@ body {
     font-size: 1.25rem;
 }
 
+/* --- Responsive Styles --- */
 @media (max-width: 767px) {
+    /* ▼▼▼ スマートフォン表示で、コンテンツがヘッダーに隠れないように修正 ▼▼▼ */
+    /* .main-containerのpadding-top: 0; を削除 */
     .main-content {
         border-left: none;
         border-right: none;
@@ -188,5 +294,6 @@ body {
         position: static;
         height: auto;
     }
+    /* ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ */
 }
 

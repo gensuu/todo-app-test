@@ -30,7 +30,9 @@
                         </div>
                         <div class="mb-4">
                             <label for="due_date" class="form-label">期限日</label>
-                            <input type="date" class="form-control" id="due_date" name="due_date" value="{{ (master_task.due_date if master_task else get_jst_today()).strftime('%Y-%m-%d') }}">
+                            <!-- ▼▼▼ valueを修正 ▼▼▼ -->
+                            <input type="date" class="form-control" id="due_date" name="due_date" value="{{ (master_task.due_date if master_task else default_date).strftime('%Y-%m-%d') }}">
+                            <!-- ▲▲▲▲▲▲▲▲▲▲▲▲▲ -->
                         </div>
                         <hr>
                         
@@ -61,7 +63,6 @@
         const addBtn = document.getElementById('add-subtask-btn');
         const maxSubtasks = 20;
         
-        // ★ テンプレートデータの読み込み方法を修正
         const templatesData = {{ templates_data | safe }};
         const existingSubtasks = {{ existing_subtasks | tojson | safe }};
 
@@ -90,7 +91,7 @@
         };
         
         const populateSubtasks = (tasks) => {
-            container.innerHTML = ''; // 既存の行をクリア
+            container.innerHTML = '';
             subtaskCounter = 0;
             if (tasks && tasks.length > 0) {
                 tasks.forEach(task => createSubtaskRow(task));
@@ -99,14 +100,12 @@
             }
         };
 
-        // 初期表示
         if (existingSubtasks.length > 0) {
             populateSubtasks(existingSubtasks);
         } else {
             createSubtaskRow();
         }
 
-        // --- テンプレート選択時の処理 ---
         const templateSelector = document.getElementById('template_selector');
         if (templateSelector) {
             templateSelector.addEventListener('change', (e) => {
@@ -115,11 +114,11 @@
                 
                 if (templateId && templatesData[templateId]) {
                     const selectedTemplate = templatesData[templateId];
-                    masterTitleInput.value = selectedTemplate.title; // 親タスク名を入力
-                    populateSubtasks(selectedTemplate.subtasks); // サブタスクを入力
+                    masterTitleInput.value = selectedTemplate.title;
+                    populateSubtasks(selectedTemplate.subtasks);
                 } else {
-                    masterTitleInput.value = ''; // 親タスク名をクリア
-                    populateSubtasks([]); // サブタスクをクリア
+                    masterTitleInput.value = '';
+                    populateSubtasks([]);
                 }
             });
         }

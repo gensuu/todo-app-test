@@ -9,6 +9,7 @@ import math
 import pytz
 from io import BytesIO
 import uuid
+import calendar # ★ カレンダー機能のために追加
 
 # --- .envファイルを読み込む ---
 from dotenv import load_dotenv
@@ -252,28 +253,36 @@ def todo_list(date_str=None):
             target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
         except ValueError:
             return redirect(url_for('todo_list'))
-
+    cal_date_str = request.args.get('cal')
+    if cal_date_str:
+        try:
+            cal_view_date = datetime.strptime(cal_date_str, '%Y-%m').date()
+        except ValueError:
+            cal_view_date = target_date
+    else:
+        cal_view_date = target_date
+    cal_year, cal_month = cal_view_date.year, cal_view_date.month
+    first_day_of_month = date(cal_year, cal_month, 1)
+    next_month_first_day = (first_day_of_month + timedelta(days=32)).replace(day=1)
+    prev_month_first_day = (first_day_of_month - timedelta(days=1)).replace(day=1)
+    uncompleted_tasks_in_month = MasterTask.query.filter(
+        MasterTask.user_id == current_user.id,
+        MasterTask.due_date >= first_day_of_month,
+        MasterTask.due_date < next_month_first_day,
+        MasterTask.subtasks.any(SubTask.is_completed == False)
+    ).all()
+    task_counts = {}
+    for task in uncompleted_tasks_in_month:
+        count = task_counts.get(task.due_date, 0)
+        task_counts[task.due_date] = count + 1
     base_query = MasterTask.query.filter(MasterTask.user_id == current_user.id)
-    
-    # ▼▼▼ タスク取得とソートのロジックを修正 ▼▼▼
     master_tasks_query = base_query.filter(
-        MasterTask.subtasks.any(
-            or_(
-                SubTask.is_completed == False,
-                SubTask.completion_date == target_date
-            )
-        )
+        MasterTask.subtasks.any(or_(SubTask.is_completed == False, SubTask.completion_date == target_date))
     )
     master_tasks = master_tasks_query.order_by(MasterTask.due_date.asc(), MasterTask.id.asc()).all()
-    
     for mt in master_tasks:
-        mt.visible_subtasks = [
-            st for st in mt.subtasks if not st.is_completed or st.completion_date == target_date
-        ]
-    
+        mt.visible_subtasks = [st for st in mt.subtasks if not st.is_completed or st.completion_date == target_date]
     master_tasks = [mt for mt in master_tasks if mt.visible_subtasks]
-    # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
-    
     all_subtasks_for_day = [st for mt in master_tasks for st in mt.visible_subtasks]
     total_grid_count = sum(sub.grid_count for sub in all_subtasks_for_day)
     completed_grid_count = sum(sub.grid_count for sub in all_subtasks_for_day if sub.is_completed)
@@ -281,8 +290,15 @@ def todo_list(date_str=None):
     required_rows = math.ceil(total_grid_count / GRID_COLS) if total_grid_count > 0 else 1
     grid_rows = max(base_rows, required_rows)
     latest_summary = DailySummary.query.filter(DailySummary.user_id == current_user.id).order_by(DailySummary.summary_date.desc()).first()
-
-    return render_template('index.html', master_tasks=master_tasks, current_date=target_date, date=date, timedelta=timedelta, total_grid_count=total_grid_count, completed_grid_count=completed_grid_count, GRID_COLS=GRID_COLS, grid_rows=grid_rows, summary=latest_summary)
+    return render_template(
+        'index.html', master_tasks=master_tasks, current_date=target_date, date=date, 
+        timedelta=timedelta, total_grid_count=total_grid_count, completed_grid_count=completed_grid_count, 
+        GRID_COLS=GRID_COLS, grid_rows=grid_rows, summary=latest_summary,
+        calendar=calendar, cal_year=cal_year, cal_month=cal_month, task_counts=task_counts,
+        prev_month_str=prev_month_first_day.strftime('%Y-%m'), 
+        next_month_str=next_month_first_day.strftime('%Y-%m'),
+        today=get_jst_today()
+    )
     
 @app.route('/add_or_edit_task', methods=['GET', 'POST'])
 @app.route('/add_or_edit_task/<int:master_id>', methods=['GET', 'POST'])
@@ -306,10 +322,16 @@ def add_or_edit_task(master_id=None):
                 db.session.add(SubTask(master_id=master_task.id, content=sub_content, grid_count=int(grid_count_str)))
         db.session.commit()
         return redirect(url_for('todo_list', date_str=master_task.due_date.strftime('%Y-%m-%d')))
+    default_date = get_jst_today()
+    date_str_from_url = request.args.get('date_str')
+    if date_str_from_url:
+        try:
+            default_date = datetime.strptime(date_str_from_url, '%Y-%m-%d').date()
+        except ValueError: pass
     templates = TaskTemplate.query.filter_by(user_id=current_user.id).all()
     templates_data = {t.id: {"title": t.title, "subtasks": [{"content": s.content, "grid_count": s.grid_count} for s in t.subtask_templates]} for t in templates}
     subtasks_for_template = [{"content": sub.content, "grid_count": sub.grid_count} for sub in (master_task.subtasks if master_task else [])]
-    return render_template('edit_task.html', master_task=master_task, existing_subtasks=subtasks_for_template, date=date, get_jst_today=get_jst_today, templates=templates, templates_data=json.dumps(templates_data))
+    return render_template('edit_task.html', master_task=master_task, existing_subtasks=subtasks_for_template, date=date, default_date=default_date, templates=templates, templates_data=templates_data)
 
 @app.route('/api/complete_subtask/<int:subtask_id>', methods=['POST'])
 @login_required
@@ -333,18 +355,37 @@ def import_excel():
         try:
             workbook, task_count = openpyxl.load_workbook(file), 0
             sheet = workbook.active
+            header = [cell.value for cell in sheet[1]]
+            try:
+                if '主タスクID' in header:
+                    col_map = {'title': header.index('主タスク'), 'due_date': header.index('期限日'), 'sub_content': header.index('サブタスク内容'), 'grid_count': header.index('マス数'),}
+                else:
+                    col_map = {'title': 0, 'due_date': 1, 'sub_content': 2, 'grid_count': 3}
+            except (ValueError, IndexError):
+                flash('Excelファイルのヘッダー形式が正しくありません。'); return redirect(url_for('import_excel'))
+            master_tasks_cache = {}
             for row in sheet.iter_rows(min_row=2, values_only=True):
-                if not row[1]: continue
-                due_date_val = row[0] if isinstance(row[0], (date, datetime)) else get_jst_today()
-                if isinstance(due_date_val, datetime): due_date_val = due_date_val.date()
-                master_task = MasterTask(title=row[1], due_date=due_date_val, user_id=current_user.id)
-                db.session.add(master_task); db.session.flush(); task_count += 1
-                for content in row[2:]:
-                    if content and str(content).strip():
-                        db.session.add(SubTask(master_id=master_task.id, content=str(content).strip(), grid_count=1))
-            db.session.commit(); flash(f'{task_count}件のタスクをインポートしました。', "message"); return redirect(url_for('todo_list'))
+                if len(row) < len(col_map): continue
+                master_title, due_date_val, sub_content, grid_count_val = row[col_map['title']], row[col_map['due_date']], row[col_map['sub_content']], row[col_map['grid_count']]
+                if not master_title or not sub_content: continue
+                try:
+                    due_date = due_date_val if isinstance(due_date_val, date) else datetime.strptime(str(due_date_val).split(" ")[0], '%Y-%m-%d').date()
+                except:
+                    due_date = get_jst_today()
+                grid_count = int(grid_count_val) if grid_count_val and str(grid_count_val).isdigit() else 1
+                cache_key = (master_title, due_date)
+                if cache_key not in master_tasks_cache:
+                    master_task = MasterTask(title=master_title, due_date=due_date, user_id=current_user.id)
+                    db.session.add(master_task); db.session.flush(); master_tasks_cache[cache_key] = master_task; task_count += 1
+                else:
+                    master_task = master_tasks_cache[cache_key]
+                db.session.add(SubTask(master_id=master_task.id, content=sub_content, grid_count=grid_count))
+            db.session.commit()
+            flash(f'{task_count}件の親タスクをインポートしました。')
+            return redirect(url_for('todo_list'))
         except Exception as e:
-            flash(f'インポート処理中にエラーが発生しました: {e}', "message"); return redirect(url_for('import_excel'))
+            flash(f'インポート処理中にエラーが発生しました: {e}')
+            return redirect(url_for('import_excel'))
     return render_template('import.html')
     
 # --- 7. テンプレート管理ルート ---
@@ -454,6 +495,33 @@ def delete_user(user_id):
     db.session.delete(user_to_delete); db.session.commit()
     flash(f"ユーザー「{user_to_delete.username}」を削除しました。")
     return redirect(url_for('admin_panel'))
+
+@app.route('/admin/export_user_data/<int:user_id>', methods=['POST'])
+@login_required
+def export_user_data(user_id):
+    if not current_user.is_admin:
+        flash("管理者権限がありません。"); return redirect(url_for('admin_panel'))
+    user = User.query.get_or_404(user_id)
+    all_tasks = SubTask.query.join(MasterTask).filter(MasterTask.user_id == user.id).order_by(MasterTask.due_date, SubTask.id).all()
+    if not all_tasks:
+        flash(f"ユーザー「{user.username}」には書き出すタスクがありません。"); return redirect(url_for('admin_panel'))
+    wb = openpyxl.Workbook(); ws = wb.active; ws.title = f"{user.username}_tasks"
+    header = ['主タスクID', '主タスク', 'サブタスク内容', 'マス数', '期限日', '完了日', '遅れた日数']
+    ws.append(header)
+    for subtask in all_tasks:
+        day_diff = (subtask.completion_date - subtask.master_task.due_date).days if subtask.completion_date else None
+        ws.append([
+            subtask.master_task.id, subtask.master_task.title, subtask.content, subtask.grid_count,
+            subtask.master_task.due_date.strftime('%Y-%m-%d'),
+            subtask.completion_date.strftime('%Y-%m-%d') if subtask.completion_date else '',
+            day_diff
+        ])
+    output = BytesIO(); wb.save(output); output.seek(0)
+    return send_file(
+        output, as_attachment=True,
+        download_name=f'{user.username}_all_tasks_{get_jst_today().strftime("%Y%m%d")}.xlsx',
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
 
 # --- アプリの実行 ---
 if __name__ == '__main__':

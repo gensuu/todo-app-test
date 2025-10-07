@@ -13,6 +13,7 @@
                         <th>ユーザー名</th>
                         <th>権限</th>
                         <th>操作</th>
+                        <th>データ書き出し</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -28,21 +29,20 @@
                                 </form>
                             {% endif %}
                         </td>
+                        <td>
+                            <form action="{{ url_for('export_user_data', user_id=user.id) }}" method="post">
+                                <button type="submit" class="btn btn-sm btn-outline-success">Excel</button>
+                            </form>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
+    <div class="text-center mt-4">
+        <a href="{{ url_for('todo_list') }}" class="btn btn-outline-secondary">戻る</a>
+    </div>
 </div>
 {% endblock %}
-```
 
----
-### ## 次に行うこと【最終確認】
-1.  **ファイルの更新・作成**: 上記のファイルをすべて更新・作成してください。
-2.  **.envファイルの設定**: `.env`ファイルに、あなたをアドミンとして登録するための行を追加します。
-    ```.env
-    # (既存の内容)
-    ADMIN_USERNAME="あなたのアカウントのユーザー名"
-    
