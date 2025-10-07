@@ -9,7 +9,7 @@ import math
 import pytz
 from io import BytesIO
 import uuid
-import calendar # ★ カレンダー機能のために追加
+import calendar
 
 # --- .envファイルを読み込む ---
 from dotenv import load_dotenv
@@ -280,8 +280,16 @@ def todo_list(date_str=None):
         MasterTask.subtasks.any(or_(SubTask.is_completed == False, SubTask.completion_date == target_date))
     )
     master_tasks = master_tasks_query.order_by(MasterTask.due_date.asc(), MasterTask.id.asc()).all()
+    
     for mt in master_tasks:
         mt.visible_subtasks = [st for st in mt.subtasks if not st.is_completed or st.completion_date == target_date]
+        # ▼▼▼ モーダル用にサブタスクの詳細情報をJSON化 ▼▼▼
+        mt.visible_subtasks_json = json.dumps([
+            {"id": st.id, "content": st.content, "is_completed": st.is_completed, "grid_count": st.grid_count} 
+            for st in mt.visible_subtasks
+        ])
+        # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+        
     master_tasks = [mt for mt in master_tasks if mt.visible_subtasks]
     all_subtasks_for_day = [st for mt in master_tasks for st in mt.visible_subtasks]
     total_grid_count = sum(sub.grid_count for sub in all_subtasks_for_day)
@@ -388,7 +396,7 @@ def import_excel():
             return redirect(url_for('import_excel'))
     return render_template('import.html')
     
-# --- 7. テンプレート管理ルート ---
+# --- 8. テンプレート管理ルート ---
 @app.route('/templates', methods=['GET', 'POST'])
 @login_required
 def manage_templates():
@@ -419,7 +427,7 @@ def delete_template(template_id):
     flash(f"テンプレート「{template.title}」を削除しました。")
     return redirect(url_for('manage_templates'))
 
-# --- 8. スプレッドシート連携とデータ整理 ---
+# --- 9. スプレッドシート連携とデータ整理 ---
 def get_gspread_client():
     sa_info = os.environ.get('GSPREAD_SERVICE_ACCOUNT')
     if not sa_info:
@@ -475,7 +483,7 @@ def export_to_sheet():
         flash(f"スプレッドシートへの書き込み中にエラーが発生しました: {e}")
     return redirect(url_for('todo_list'))
 
-# --- 9. 管理者用ルート ---
+# --- 10. 管理者用ルート ---
 @app.route('/admin')
 @login_required
 def admin_panel():

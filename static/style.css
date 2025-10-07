@@ -163,6 +163,12 @@ body {
     border-color: var(--dark-border) !important;
 }
 
+/* ▼▼▼ モーダルの背景をより暗くする ▼▼▼ */
+.modal-backdrop.show {
+    opacity: 0.95; 
+}
+/* ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ */
+
 /* --- Right Sidebar: Calendar --- */
 .calendar-card .card-header {
     display: flex;
@@ -247,6 +253,7 @@ body {
     left: 50%;
     transform: translateX(-50%);
     width: 10px;
+    height: auto;
 }
 
 .task-dot {
@@ -322,7 +329,7 @@ body {
         height: auto;
     }
     .app-header {
-        position: fixed; /* Keep header fixed on mobile */
+        position: fixed;
     }
 }
 
