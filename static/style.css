@@ -140,6 +140,29 @@ body {
     color: #ffc107;
 }
 
+/* --- Focus Mode Styles --- */
+.task-title-clickable {
+    cursor: pointer;
+    transition: color 0.2s ease-in-out;
+}
+.task-title-clickable:hover {
+    color: #a991f7;
+}
+
+.modal-content {
+    background-color: var(--dark-card-bg);
+    border: 1px solid var(--dark-border);
+}
+
+.modal-header {
+    border-bottom: 1px solid var(--dark-border);
+}
+
+.modal-body .list-group-item {
+    background-color: transparent;
+    border-color: var(--dark-border) !important;
+}
+
 /* --- Right Sidebar: Calendar --- */
 .calendar-card .card-header {
     display: flex;
@@ -284,8 +307,12 @@ body {
 
 /* --- Responsive Styles --- */
 @media (max-width: 767px) {
-    /* ▼▼▼ スマートフォン表示で、コンテンツがヘッダーに隠れないように修正 ▼▼▼ */
-    /* .main-containerのpadding-top: 0; を削除 */
+    body {
+        padding-top: 56px;
+    }
+    .main-container {
+        padding-top: 0;
+    }
     .main-content {
         border-left: none;
         border-right: none;
@@ -294,6 +321,8 @@ body {
         position: static;
         height: auto;
     }
-    /* ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ */
+    .app-header {
+        position: fixed; /* Keep header fixed on mobile */
+    }
 }
 
