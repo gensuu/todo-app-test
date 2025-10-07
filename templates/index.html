@@ -33,7 +33,7 @@
     <!-- Main Content -->
     <main class="col-md-6 col-lg-6 main-content">
         <header class="text-center my-4">
-            <h1>🗓️ Todoリスト</h1>
+            <h1>Todoリスト</h1>
             <p class="lead">{{ current_date.strftime('%Y年%m月%d日') }}</p>
             {% set prev_day = current_date - timedelta(days=1) %}
             {% set next_day = current_date + timedelta(days=1) %}
@@ -66,7 +66,7 @@
         </div>
 
         <div class="task-list-container">
-            <h2>✅ タスク一覧</h2>
+            <h2>タスク一覧</h2>
             {% for master_task in master_tasks %}
                 {% if master_task.visible_subtasks %}
                 <div class="card master-task-card mb-3">
@@ -85,7 +85,7 @@
                                 <small class="text-muted">({{ master_task.due_date.strftime('%m/%d') }})</small>
                             {% endif %}
                         </span>
-                        <a href="{{ url_for('add_or_edit_task', master_id=master_task.id) }}" class="btn btn-sm btn-outline-light">✏️ 編集</a>
+                        <a href="{{ url_for('add_or_edit_task', master_id=master_task.id) }}" class="btn btn-sm btn-outline-light">[編集]</a>
                     </div>
                     <ul class="list-group list-group-flush">
                         {% for subtask in master_task.visible_subtasks %}
@@ -229,14 +229,12 @@ document.addEventListener('DOMContentLoaded', () => {
         circle.style.setProperty('--progress', `${progress}%`);
     }
 
-    // ▼▼▼ フォーカスモード用のJavaScriptを修正 ▼▼▼
     const taskFocusModal = document.getElementById('taskFocusModal');
     if (taskFocusModal) {
         let toggledSubtaskIds = new Set();
 
-        // モーダルが表示される直前の処理
         taskFocusModal.addEventListener('show.bs.modal', event => {
-            toggledSubtaskIds.clear(); // 変更リストをリセット
+            toggledSubtaskIds.clear(); 
             const triggerElement = event.relatedTarget;
             const taskTitle = triggerElement.getAttribute('data-task-title');
             const subtasks = JSON.parse(triggerElement.getAttribute('data-task-subtasks'));
@@ -263,20 +261,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     modalBodyList.appendChild(li);
                 });
 
-                // モーダル内のチェックボックスにイベントリスナーを設定
                 modalBodyList.querySelectorAll('.complete-toggle-modal').forEach(toggle => {
                     toggle.addEventListener('click', function() {
                         const li = this.closest('li');
                         const subtaskId = li.dataset.subtaskId;
 
-                        // 変更リストに追加/削除
                         if (toggledSubtaskIds.has(subtaskId)) {
                             toggledSubtaskIds.delete(subtaskId);
                         } else {
                             toggledSubtaskIds.add(subtaskId);
                         }
                         
-                        // 見た目だけをトグル
                         li.classList.toggle('completed');
                         this.classList.toggle('bi-check-square-fill');
                         this.classList.toggle('bi-square');
@@ -291,20 +286,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // モーダルが閉じられた直後の処理
         taskFocusModal.addEventListener('hidden.bs.modal', async () => {
             if (toggledSubtaskIds.size === 0) {
-                return; // 変更がなければ何もしない
+                return;
             }
 
-            // 変更されたIDのリストをサーバーに送信
             const promises = Array.from(toggledSubtaskIds).map(id => {
                 return fetch(`/api/complete_subtask/${id}`, { method: 'POST' });
             });
 
             try {
                 await Promise.all(promises);
-                // すべての更新が完了したらページをリロード
                 location.reload();
             } catch (error) {
                 console.error('一括タスク更新エラー:', error);
@@ -312,7 +304,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-    // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 });
 </script>
 {% endblock %}
