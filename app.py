@@ -62,6 +62,7 @@ class MasterTask(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     title = db.Column(db.String(100), nullable=False)
     due_date = db.Column(DateAsString, default=lambda: get_jst_today(), nullable=False)
+    is_urgent = db.Column(db.Boolean, default=False, nullable=False)
     subtasks = db.relationship('SubTask', backref='master_task', lazy=True, cascade="all, delete-orphan")
 
 class SubTask(db.Model):
@@ -279,17 +280,14 @@ def todo_list(date_str=None):
     master_tasks_query = base_query.filter(
         MasterTask.subtasks.any(or_(SubTask.is_completed == False, SubTask.completion_date == target_date))
     )
-    master_tasks = master_tasks_query.order_by(MasterTask.due_date.asc(), MasterTask.id.asc()).all()
-    
+    master_tasks = master_tasks_query.order_by(MasterTask.is_urgent.desc(), MasterTask.due_date.asc(), MasterTask.id.asc()).all()
     for mt in master_tasks:
         mt.visible_subtasks = [st for st in mt.subtasks if not st.is_completed or st.completion_date == target_date]
-        # ▼▼▼ モーダル用にサブタスクの詳細情報をJSON化 ▼▼▼
         mt.visible_subtasks_json = json.dumps([
             {"id": st.id, "content": st.content, "is_completed": st.is_completed, "grid_count": st.grid_count} 
             for st in mt.visible_subtasks
         ])
-        # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
-        
+        mt.all_completed = all(st.is_completed for st in mt.visible_subtasks) if mt.visible_subtasks else False
     master_tasks = [mt for mt in master_tasks if mt.visible_subtasks]
     all_subtasks_for_day = [st for mt in master_tasks for st in mt.visible_subtasks]
     total_grid_count = sum(sub.grid_count for sub in all_subtasks_for_day)
@@ -316,12 +314,47 @@ def add_or_edit_task(master_id=None):
     if master_task and master_task.user_id != current_user.id:
         flash("権限がありません。"); return redirect(url_for('todo_list'))
     if request.method == 'POST':
+        # ▼▼▼ テンプレート保存ボタンが押された場合の処理 ▼▼▼
+        if 'save_as_template' in request.form:
+            template_title = request.form.get('master_title')
+            if not template_title:
+                flash("テンプレートとして保存するには、親タスクのタイトルが必要です。")
+                return redirect(request.url)
+            
+            # 既存のテンプレートがあれば更新、なければ新規作成
+            existing_template = TaskTemplate.query.filter_by(user_id=current_user.id, title=template_title).first()
+            if existing_template:
+                template = existing_template
+                # 既存のサブテンプレートを削除
+                SubtaskTemplate.query.filter_by(template_id=template.id).delete()
+            else:
+                template = TaskTemplate(title=template_title, user_id=current_user.id)
+                db.session.add(template)
+                db.session.flush()
+
+            subtask_count = 0
+            for i in range(1, 21):
+                sub_content = request.form.get(f'sub_content_{i}')
+                grid_count_str = request.form.get(f'grid_count_{i}', '0')
+                if sub_content and grid_count_str.isdigit() and int(grid_count_str) > 0:
+                    db.session.add(SubtaskTemplate(template_id=template.id, content=sub_content, grid_count=int(grid_count_str)))
+                    subtask_count += 1
+            
+            if subtask_count == 0:
+                 flash("サブタスクが1つもないため、テンプレートは保存されませんでした。"); db.session.rollback(); return redirect(request.url)
+            
+            db.session.commit()
+            flash(f"テンプレート「{template_title}」を保存しました。")
+            return redirect(url_for('manage_templates'))
+        
+        # 通常のタスク保存処理
         master_title, due_date_str = request.form.get('master_title'), request.form.get('due_date')
+        is_urgent = True if request.form.get('is_urgent') else False
         due_date_obj = datetime.strptime(due_date_str, '%Y-%m-%d').date() if due_date_str else get_jst_today()
         if master_task:
-            master_task.title, master_task.due_date = master_title, due_date_obj
+            master_task.title, master_task.due_date, master_task.is_urgent = master_title, due_date_obj, is_urgent
         else:
-            master_task = MasterTask(title=master_title, due_date=due_date_obj, user_id=current_user.id)
+            master_task = MasterTask(title=master_title, due_date=due_date_obj, user_id=current_user.id, is_urgent=is_urgent)
             db.session.add(master_task); db.session.flush()
         SubTask.query.filter_by(master_id=master_task.id).delete()
         for i in range(1, 21):
@@ -330,6 +363,7 @@ def add_or_edit_task(master_id=None):
                 db.session.add(SubTask(master_id=master_task.id, content=sub_content, grid_count=int(grid_count_str)))
         db.session.commit()
         return redirect(url_for('todo_list', date_str=master_task.due_date.strftime('%Y-%m-%d')))
+        
     default_date = get_jst_today()
     date_str_from_url = request.args.get('date_str')
     if date_str_from_url:
@@ -396,7 +430,7 @@ def import_excel():
             return redirect(url_for('import_excel'))
     return render_template('import.html')
     
-# --- 8. テンプレート管理ルート ---
+# --- 8. テンプレート管理とスクラッチパッド ---
 @app.route('/templates', methods=['GET', 'POST'])
 @login_required
 def manage_templates():
@@ -426,6 +460,29 @@ def delete_template(template_id):
     db.session.commit()
     flash(f"テンプレート「{template.title}」を削除しました。")
     return redirect(url_for('manage_templates'))
+
+@app.route('/scratchpad')
+@login_required
+def scratchpad():
+    return render_template('scratchpad.html')
+
+@app.route('/export_scratchpad', methods=['POST'])
+@login_required
+def export_scratchpad():
+    tasks_to_add = request.json.get('tasks')
+    if not tasks_to_add:
+        return jsonify({'success': False, 'message': 'No tasks to add.'}), 400
+    today = get_jst_today()
+    master_title = f"{today.strftime('%Y-%m-%d')}のクイックタスク"
+    master_task = MasterTask.query.filter_by(user_id=current_user.id, title=master_title, due_date=today).first()
+    if not master_task:
+        master_task = MasterTask(title=master_title, due_date=today, user_id=current_user.id)
+        db.session.add(master_task); db.session.flush()
+    for task_content in tasks_to_add:
+        db.session.add(SubTask(master_id=master_task.id, content=task_content, grid_count=1))
+    db.session.commit()
+    flash(f"{len(tasks_to_add)}件のクイックタスクをタスク一覧に追加しました。")
+    return jsonify({'success': True})
 
 # --- 9. スプレッドシート連携とデータ整理 ---
 def get_gspread_client():

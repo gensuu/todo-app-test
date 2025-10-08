@@ -74,6 +74,18 @@ body {
     padding-left: 0.75rem;
 }
 
+/* 「今からTodo」ボタンのスタイル */
+.sidebar-left .scratchpad-btn {
+    background-color: #6c757d; /* 明るめの灰色 */
+    color: white;
+    border-color: #6c757d;
+}
+.sidebar-left .scratchpad-btn:hover {
+    background-color: #5a6268;
+    border-color: #545b62;
+}
+
+
 .main-content {
     border-left: 1px solid var(--dark-border);
     border-right: 1px solid var(--dark-border);
@@ -140,13 +152,29 @@ body {
     color: #ffc107;
 }
 
-/* --- Focus Mode Styles --- */
+.master-task-card.all-completed {
+    opacity: 0.3;
+    transition: opacity 0.3s ease-in-out;
+}
+.master-task-card.all-completed:hover {
+    opacity: 1;
+}
+
+/* --- Focus Mode & Urgent Task Styles --- */
 .task-title-clickable {
     cursor: pointer;
     transition: color 0.2s ease-in-out;
 }
 .task-title-clickable:hover {
     color: #a991f7;
+}
+
+.task-title-clickable.text-urgent,
+.task-title-clickable.text-urgent .text-muted {
+    color: #e57373 !important; /* 目に優しい赤 */
+}
+.task-title-clickable.text-urgent:hover {
+    color: #ef9a9a !important; /* ホバー時の少し明るい赤 */
 }
 
 .modal-content {
@@ -163,11 +191,9 @@ body {
     border-color: var(--dark-border) !important;
 }
 
-/* ▼▼▼ モーダルの背景をより暗くする ▼▼▼ */
 .modal-backdrop.show {
     opacity: 0.95; 
 }
-/* ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ */
 
 /* --- Right Sidebar: Calendar --- */
 .calendar-card .card-header {
@@ -205,7 +231,7 @@ body {
 .calendar-table td a {
     display: block;
     width: 100%;
-    aspect-ratio: 1 / 0.85; 
+    aspect-ratio: 1 / 0.8; 
     border-radius: 4px;
     text-decoration: none;
     color: #f8f9fa;
@@ -241,7 +267,7 @@ body {
     position: absolute;
     top: 2px;
     left: 4px;
-    font-size: 0.6rem;
+    font-size: 0.55rem;
 }
 
 .task-dots {
@@ -307,10 +333,15 @@ body {
     flex-direction: column;
     align-items: center;
     font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
 }
 .d-md-none.navbar .btn i {
     font-size: 1.25rem;
 }
+.d-md-none.navbar .scratchpad-btn-mobile {
+    color: #adb5bd;
+}
+
 
 /* --- Responsive Styles --- */
 @media (max-width: 767px) {

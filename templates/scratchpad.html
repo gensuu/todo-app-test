@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="ja" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>今からTodo</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@300;400&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --dark-bg: #212529;
+            --dark-card-bg: #2b3035;
+            --dark-border: #444;
+            --text-color: #dee2e6;
+        }
+        body {
+            background-color: var(--dark-bg);
+            color: var(--text-color);
+            font-family: 'Kalam', cursive;
+            font-weight: 300;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            margin: 0;
+        }
+        .scratchpad-header {
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--dark-border);
+        }
+        .scratchpad-buttons .btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background-color: #343a40;
+            border: 1px solid #495057;
+            color: var(--text-color);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2), inset 0 1px 1px rgba(255,255,255,0.05);
+            transition: all 0.2s ease-in-out;
+            font-size: 1.2rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .scratchpad-buttons .btn:hover {
+            background-color: #495057;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.05);
+            transform: translateY(-2px);
+        }
+        .scratchpad-buttons .btn:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2), inset 0 1px 1px rgba(255,255,255,0.05);
+        }
+        .scratchpad-main {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 30px;
+        }
+        #scratch-list {
+            list-style: none;
+            padding-left: 0;
+            font-size: 1.8rem;
+            line-height: 1.6;
+        }
+        #scratch-list li {
+            display: flex;
+            align-items: center;
+            position: relative;
+        }
+        #scratch-list li::before {
+            content: '•';
+            margin-right: 15px;
+            cursor: pointer;
+            color: #6c757d;
+            transition: color 0.2s;
+        }
+        #scratch-list li:hover::before {
+            color: #adb5bd;
+        }
+        #scratch-list li.completed {
+            color: #6c757d;
+            position: relative;
+        }
+        /* ▼▼▼ 手書き風の横線を修正 ▼▼▼ */
+        #scratch-list li.completed .task-text::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 55%;
+            width: 100%;
+            height: 2px;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="4"><path d="M0,2 Q25,1 50,2 T100,2" stroke="%238d9399" stroke-width="2" fill="none"/></svg>');
+            background-repeat: repeat-x;
+            background-size: contain;
+        }
+        .task-text {
+            position: relative;
+            display: inline-block;
+        }
+        /* ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ */
+
+        .input-area {
+            padding: 20px;
+            border-top: 1px solid var(--dark-border);
+            display: flex;
+            gap: 15px;
+        }
+        .input-area input {
+            flex-grow: 1;
+            background-color: transparent;
+            border: none;
+            border-bottom: 1px solid var(--dark-border);
+            color: var(--text-color);
+            font-size: 1.5rem;
+            font-family: 'Kalam', cursive;
+        }
+        .input-area input:focus {
+            outline: none;
+            border-bottom-color: var(--primary-color, #6a5acd);
+        }
+        .input-area .btn-add {
+            flex-shrink: 0;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background-color: #6a5acd;
+            border: none;
+            font-size: 2rem;
+            color: white;
+            line-height: 1;
+        }
+    </style>
+</head>
+<body>
+    <header class="scratchpad-header">
+        <h1>今からTodo</h1>
+        <div class="scratchpad-buttons d-flex gap-2">
+            <a href="{{ url_for('todo_list') }}" class="btn" title="戻る"><i class="bi bi-arrow-left"></i></a>
+            <button class="btn" id="export-btn" title="タスク一覧へ書き出し"><i class="bi bi-send"></i></button>
+        </div>
+    </header>
+
+    <main class="scratchpad-main">
+        <ul id="scratch-list">
+        </ul>
+    </main>
+
+    <div class="input-area">
+        <input type="text" id="new-scratch-task" placeholder="とりあえずやることを書く...">
+        <button class="btn-add" id="add-scratch-btn">+</button>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const list = document.getElementById('scratch-list');
+            const input = document.getElementById('new-scratch-task');
+            const addButton = document.getElementById('add-scratch-btn');
+            const exportButton = document.getElementById('export-btn');
+
+            const addTask = () => {
+                const taskText = input.value.trim();
+                if (taskText === '') return;
+
+                const li = document.createElement('li');
+                const span = document.createElement('span');
+                span.classList.add('task-text');
+                span.textContent = taskText;
+                li.appendChild(span);
+
+                list.appendChild(li);
+                input.value = '';
+                input.focus();
+            };
+
+            addButton.addEventListener('click', addTask);
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    addTask();
+                }
+            });
+
+            list.addEventListener('click', (e) => {
+                const li = e.target.closest('li');
+                if (li) {
+                    li.classList.toggle('completed');
+                }
+            });
+
+            exportButton.addEventListener('click', async () => {
+                const uncompletedTasks = [];
+                list.querySelectorAll('li:not(.completed) .task-text').forEach(span => {
+                    uncompletedTasks.push(span.textContent);
+                });
+
+                if (uncompletedTasks.length === 0) {
+                    alert('書き出す未完了タスクがありません。');
+                    return;
+                }
+
+                try {
+                    const response = await fetch("{{ url_for('export_scratchpad') }}", {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ tasks: uncompletedTasks }),
+                    });
+                    if (!response.ok) throw new Error('書き出しに失敗しました。');
+                    window.location.href = "{{ url_for('todo_list') }}";
+                } catch (error) {
+                    console.error('Export error:', error);
+                    alert(error.message);
+                }
+            });
+        });
+    </script>
+</body>
+</html>
+

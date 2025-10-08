@@ -7,8 +7,11 @@
     <div class="row justify-content-center">
         <div class="col-lg-8">
             <div class="card edit-task-card">
-                <div class="card-header">
-                    <h2>{% if master_task %}タスクの編集{% else %}新しいタスクの追加{% endif %}</h2>
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h2 class="mb-0">{% if master_task %}タスクの編集{% else %}新しいタスクの追加{% endif %}</h2>
+                    <a href="{{ url_for('manage_templates') }}" class="btn btn-sm btn-outline-info">
+                        <i class="bi bi-journal-album"></i> テンプレート管理
+                    </a>
                 </div>
                 <div class="card-body">
                     {% if not master_task %}
@@ -24,15 +27,26 @@
                     {% endif %}
 
                     <form method="post">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="is_urgent" id="is_urgent" {% if master_task and master_task.is_urgent %}checked{% endif %}>
+                                <label class="form-check-label" for="is_urgent">
+                                    緊急のタスクとしてマークする
+                                </label>
+                            </div>
+                            <!-- ▼▼▼ テンプレートとして保存ボタンを追加 ▼▼▼ -->
+                            <button type="submit" name="save_as_template" value="true" class="btn btn-outline-secondary btn-sm rounded-circle" title="現在の内容をテンプレートとして保存">
+                                <i class="bi bi-bookmark-plus"></i>
+                            </button>
+                            <!-- ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ -->
+                        </div>
                         <div class="mb-3">
                             <label for="master_title" class="form-label">親タスクのタイトル</label>
                             <input type="text" class="form-control" id="master_title" name="master_title" value="{{ master_task.title if master_task else '' }}" required>
                         </div>
                         <div class="mb-4">
                             <label for="due_date" class="form-label">期限日</label>
-                            <!-- ▼▼▼ valueを修正 ▼▼▼ -->
                             <input type="date" class="form-control" id="due_date" name="due_date" value="{{ (master_task.due_date if master_task else default_date).strftime('%Y-%m-%d') }}">
-                            <!-- ▲▲▲▲▲▲▲▲▲▲▲▲▲ -->
                         </div>
                         <hr>
                         
