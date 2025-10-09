@@ -161,7 +161,6 @@ def index():
 
 @app.route("/healthz")
 def health_check():
-    """Renderのヘルスチェックに応答するためのルート"""
     return "OK", 200
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -245,6 +244,12 @@ def settings():
         days_until_deletion = (deletion_date - today).days
     sa_email = os.environ.get('SERVICE_ACCOUNT_EMAIL', '（管理者が設定してください）')
     return render_template('settings.html', sa_email=sa_email, days_until_deletion=days_until_deletion)
+
+# ▼▼▼ サービスワーカー用のルートを追加 ▼▼▼
+@app.route('/sw.js')
+def service_worker():
+    return send_file('sw.js', mimetype='application/javascript')
+# ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
 # --- 6. Todoアプリ本体のルート ---
 @app.route('/todo')
