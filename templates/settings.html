@@ -31,7 +31,7 @@
         </div>
 
         <!-- Password Change Card -->
-        <div class="card">
+        <div class="card mb-4">
             <div class="card-body">
                 <h2 class="card-title text-center mb-4">パスワード変更</h2>
                 <form method="POST" action="{{ url_for('settings') }}">
@@ -68,6 +68,20 @@
                 </form>
             </div>
         </div>
+
+        <!-- ▼▼▼ アプリインストール用のカードを追加 ▼▼▼ -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <h2 class="card-title text-center mb-4">アプリケーション</h2>
+                 <p class="text-center text-muted">このアプリをホーム画面に追加して、素早くアクセスできます。</p>
+                <div class="d-grid">
+                    <button class="btn btn-info" id="install-app-button" style="display: none;">
+                        <i class="bi bi-phone-fill"></i> アプリをインストール
+                    </button>
+                </div>
+            </div>
+        </div>
+        <!-- ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ -->
         
         <p class="text-muted mt-4 small">
             <strong>注意：</strong> 完了日から32日以上経過したタスクは、アプリのトップページを開くたびにデータベースから自動的に削除されます。重要なデータは、定期的にスプレッドシートへ書き出してバックアップしてください。
@@ -97,11 +111,9 @@
         if (!toggleButton || !passwordInput) return;
 
         toggleButton.addEventListener('click', function () {
-            // toggle the type attribute
             const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
             passwordInput.setAttribute('type', type);
             
-            // toggle the eye icon
             const icon = this.querySelector('i');
             icon.classList.toggle('bi-eye-fill');
             icon.classList.toggle('bi-eye-slash-fill');
