@@ -153,6 +153,14 @@ def init_db(secret_key):
         return "データベースが初期化されました。"
     else:
         return "認証キーが正しくありません。", 403
+    
+
+# ▼▼▼ この関数をまるごと追加 ▼▼▼
+@app.route("/healthz")
+def health_check():
+    return "OK", 200
+# ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
 
 # --- 5. 認証・ログイン関連のルート ---
 @app.route("/")
