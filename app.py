@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, session, send_file
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import or_, and_, func, TypeDecorator, String
-from sqlalchemy.orm import selectinload # ★ パフォーマンス改善のために追加
+from sqlalchemy.orm import selectinload
 from datetime import date, datetime, timedelta
 import os
 import openpyxl
@@ -286,7 +286,6 @@ def todo_list(date_str=None):
         count = task_counts.get(task.due_date, 0)
         task_counts[task.due_date] = count + 1
     
-    # ▼▼▼ パフォーマンス改善のための修正 ▼▼▼
     master_tasks_query = MasterTask.query.options(
         selectinload(MasterTask.subtasks)
     ).filter(
@@ -294,7 +293,6 @@ def todo_list(date_str=None):
         MasterTask.subtasks.any(or_(SubTask.is_completed == False, SubTask.completion_date == target_date))
     )
     master_tasks = master_tasks_query.order_by(MasterTask.is_urgent.desc(), MasterTask.due_date.asc(), MasterTask.id.asc()).all()
-    # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
     
     for mt in master_tasks:
         mt.visible_subtasks = [st for st in mt.subtasks if not st.is_completed or st.completion_date == target_date]

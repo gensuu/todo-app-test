@@ -81,6 +81,8 @@ self.addEventListener('fetch', event => {
             cache.put(event.request, networkResponse.clone());
           }
           return networkResponse;
+        }).catch(err => {
+          console.warn('Network request failed, probably offline:', err);
         });
         // キャッシュがあればそれを返しつつ、裏でネットワークに更新を確認
         return response || fetchPromise;
