@@ -99,9 +99,7 @@ login_manager.login_view = "login"
 
 @login_manager.user_loader
 def load_user(user_id):
-    # ▼▼▼ 警告を解消するための修正 ▼▼▼
     return db.session.get(User, int(user_id))
-    # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
 def get_jst_today():
     return datetime.now(pytz.timezone('Asia/Tokyo')).date()
@@ -160,6 +158,11 @@ def init_db(secret_key):
 @app.route("/")
 def index():
     return redirect(url_for("todo_list"))
+
+@app.route("/healthz")
+def health_check():
+    """Renderのヘルスチェックに応答するためのルート"""
+    return "OK", 200
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
