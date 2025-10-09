@@ -70,7 +70,6 @@
 
     <!-- ▼▼▼ PWAインストール用のスクリプトを追加 ▼▼▼ -->
     <script>
-        // 1. Service Workerの登録
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('/sw.js').then(registration => {
@@ -81,16 +80,12 @@
             });
         }
 
-        // 2. インストールボタンの制御
         let deferredPrompt;
         const installButton = document.getElementById('install-app-button');
 
         window.addEventListener('beforeinstallprompt', (e) => {
-            // ブラウザのデフォルトのプロンプトを抑制
             e.preventDefault();
-            // イベントを後で使えるように保存
             deferredPrompt = e;
-            // インストールボタンを表示
             if (installButton) {
                 installButton.style.display = 'block';
             }
@@ -99,14 +94,10 @@
         if (installButton) {
             installButton.addEventListener('click', async () => {
                 if (deferredPrompt) {
-                    // 保存しておいたプロンプトを表示
                     deferredPrompt.prompt();
-                    // 結果を待つ
                     const { outcome } = await deferredPrompt.userChoice;
                     console.log(`User response to the install prompt: ${outcome}`);
-                    // 一度しか使えないので、変数をクリア
                     deferredPrompt = null;
-                    // ボタンを非表示にする
                     installButton.style.display = 'none';
                 }
             });

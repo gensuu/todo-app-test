@@ -99,7 +99,9 @@ login_manager.login_view = "login"
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    # ▼▼▼ 警告を解消するための修正 ▼▼▼
+    return db.session.get(User, int(user_id))
+    # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
 def get_jst_today():
     return datetime.now(pytz.timezone('Asia/Tokyo')).date()
@@ -153,14 +155,6 @@ def init_db(secret_key):
         return "データベースが初期化されました。"
     else:
         return "認証キーが正しくありません。", 403
-    
-
-# ▼▼▼ この関数をまるごと追加 ▼▼▼
-@app.route("/healthz")
-def health_check():
-    return "OK", 200
-# ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
-
 
 # --- 5. 認証・ログイン関連のルート ---
 @app.route("/")
@@ -248,12 +242,6 @@ def settings():
         days_until_deletion = (deletion_date - today).days
     sa_email = os.environ.get('SERVICE_ACCOUNT_EMAIL', '（管理者が設定してください）')
     return render_template('settings.html', sa_email=sa_email, days_until_deletion=days_until_deletion)
-
-# ▼▼▼ サービスワーカー用のルートを追加 ▼▼▼
-@app.route('/sw.js')
-def service_worker():
-    return send_file('sw.js', mimetype='application/javascript')
-# ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
 # --- 6. Todoアプリ本体のルート ---
 @app.route('/todo')

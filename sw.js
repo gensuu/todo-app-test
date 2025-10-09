@@ -1,36 +1,57 @@
-const CACHE_NAME = 'todo-grid-cache-v1';
+const CACHE_NAME = 'todo-grid-cache-v2';
 const urlsToCache = [
   '/',
   '/todo',
-  '/static/style.css',
-  'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css',
-  'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css',
-  'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js'
+  '/static/style.css'
 ];
 
-// インストール時にファイルをキャッシュする
+// インストール時に基本的なファイルをキャッシュする
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('Opened cache');
-        return cache.addAll(urlsToCache);
-      })
+    caches.open(CACHE_NAME).then(cache => {
+      console.log('Opened cache and caching basic assets');
+      return cache.addAll(urlsToCache);
+    })
   );
 });
 
-// リクエスト時にキャッシュから返す
+// Stale-While-Revalidate戦略
 self.addEventListener('fetch', event => {
+  // POSTリクエストやAPIリクエストはキャッシュしない
+  if (event.request.method !== 'GET' || event.request.url.includes('/api/')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
   event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        // キャッシュにあればそれを返す
-        if (response) {
-          return response;
-        }
-        // なければネットワークから取得
-        return fetch(event.request);
-      }
-    )
+    caches.open(CACHE_NAME).then(cache => {
+      return cache.match(event.request).then(response => {
+        // 1. まずキャッシュから返す (Stale)
+        const fetchPromise = fetch(event.request).then(networkResponse => {
+          // 2. 裏でネットワークから取得し、キャッシュを更新 (Revalidate)
+          cache.put(event.request, networkResponse.clone());
+          return networkResponse;
+        });
+
+        return response || fetchPromise;
+      });
+    })
   );
 });
+
+// 古いキャッシュを削除
+self.addEventListener('activate', event => {
+  const cacheWhitelist = [CACHE_NAME];
+  event.waitUntil(
+    caches.keys().then(cacheNames => {
+      return Promise.all(
+        cacheNames.map(cacheName => {
+          if (cacheWhitelist.indexOf(cacheName) === -1) {
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    })
+  );
+});
+
