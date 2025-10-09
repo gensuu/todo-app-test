@@ -241,6 +241,12 @@ def settings():
     sa_email = os.environ.get('SERVICE_ACCOUNT_EMAIL', '（管理者が設定してください）')
     return render_template('settings.html', sa_email=sa_email, days_until_deletion=days_until_deletion)
 
+# ▼▼▼ サービスワーカー用のルートを追加 ▼▼▼
+@app.route('/sw.js')
+def service_worker():
+    return send_file('sw.js', mimetype='application/javascript')
+# ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
 # --- 6. Todoアプリ本体のルート ---
 @app.route('/todo')
 @app.route('/todo/<date_str>')
@@ -314,40 +320,27 @@ def add_or_edit_task(master_id=None):
     if master_task and master_task.user_id != current_user.id:
         flash("権限がありません。"); return redirect(url_for('todo_list'))
     if request.method == 'POST':
-        # ▼▼▼ テンプレート保存ボタンが押された場合の処理 ▼▼▼
         if 'save_as_template' in request.form:
             template_title = request.form.get('master_title')
             if not template_title:
-                flash("テンプレートとして保存するには、親タスクのタイトルが必要です。")
-                return redirect(request.url)
-            
-            # 既存のテンプレートがあれば更新、なければ新規作成
+                flash("テンプレートとして保存するには、親タスクのタイトルが必要です。"); return redirect(request.url)
             existing_template = TaskTemplate.query.filter_by(user_id=current_user.id, title=template_title).first()
             if existing_template:
                 template = existing_template
-                # 既存のサブテンプレートを削除
                 SubtaskTemplate.query.filter_by(template_id=template.id).delete()
             else:
                 template = TaskTemplate(title=template_title, user_id=current_user.id)
-                db.session.add(template)
-                db.session.flush()
-
+                db.session.add(template); db.session.flush()
             subtask_count = 0
             for i in range(1, 21):
-                sub_content = request.form.get(f'sub_content_{i}')
-                grid_count_str = request.form.get(f'grid_count_{i}', '0')
+                sub_content, grid_count_str = request.form.get(f'sub_content_{i}'), request.form.get(f'grid_count_{i}', '0')
                 if sub_content and grid_count_str.isdigit() and int(grid_count_str) > 0:
                     db.session.add(SubtaskTemplate(template_id=template.id, content=sub_content, grid_count=int(grid_count_str)))
                     subtask_count += 1
-            
             if subtask_count == 0:
                  flash("サブタスクが1つもないため、テンプレートは保存されませんでした。"); db.session.rollback(); return redirect(request.url)
-            
             db.session.commit()
-            flash(f"テンプレート「{template_title}」を保存しました。")
-            return redirect(url_for('manage_templates'))
-        
-        # 通常のタスク保存処理
+            flash(f"テンプレート「{template_title}」を保存しました。"); return redirect(url_for('manage_templates'))
         master_title, due_date_str = request.form.get('master_title'), request.form.get('due_date')
         is_urgent = True if request.form.get('is_urgent') else False
         due_date_obj = datetime.strptime(due_date_str, '%Y-%m-%d').date() if due_date_str else get_jst_today()
@@ -363,7 +356,6 @@ def add_or_edit_task(master_id=None):
                 db.session.add(SubTask(master_id=master_task.id, content=sub_content, grid_count=int(grid_count_str)))
         db.session.commit()
         return redirect(url_for('todo_list', date_str=master_task.due_date.strftime('%Y-%m-%d')))
-        
     default_date = get_jst_today()
     date_str_from_url = request.args.get('date_str')
     if date_str_from_url:
