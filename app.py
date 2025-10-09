@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, session, send_file
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import or_, and_, func, TypeDecorator, String
+from sqlalchemy.orm import selectinload # ★ パフォーマンス改善のために追加
 from datetime import date, datetime, timedelta
 import os
 import openpyxl
@@ -245,11 +246,9 @@ def settings():
     sa_email = os.environ.get('SERVICE_ACCOUNT_EMAIL', '（管理者が設定してください）')
     return render_template('settings.html', sa_email=sa_email, days_until_deletion=days_until_deletion)
 
-# ▼▼▼ サービスワーカー用のルートを追加 ▼▼▼
 @app.route('/sw.js')
 def service_worker():
     return send_file('sw.js', mimetype='application/javascript')
-# ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
 # --- 6. Todoアプリ本体のルート ---
 @app.route('/todo')
@@ -286,11 +285,17 @@ def todo_list(date_str=None):
     for task in uncompleted_tasks_in_month:
         count = task_counts.get(task.due_date, 0)
         task_counts[task.due_date] = count + 1
-    base_query = MasterTask.query.filter(MasterTask.user_id == current_user.id)
-    master_tasks_query = base_query.filter(
+    
+    # ▼▼▼ パフォーマンス改善のための修正 ▼▼▼
+    master_tasks_query = MasterTask.query.options(
+        selectinload(MasterTask.subtasks)
+    ).filter(
+        MasterTask.user_id == current_user.id,
         MasterTask.subtasks.any(or_(SubTask.is_completed == False, SubTask.completion_date == target_date))
     )
     master_tasks = master_tasks_query.order_by(MasterTask.is_urgent.desc(), MasterTask.due_date.asc(), MasterTask.id.asc()).all()
+    # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+    
     for mt in master_tasks:
         mt.visible_subtasks = [st for st in mt.subtasks if not st.is_completed or st.completion_date == target_date]
         mt.visible_subtasks_json = json.dumps([
