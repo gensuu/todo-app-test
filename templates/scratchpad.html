@@ -18,37 +18,63 @@
             --dark-border: #444;
             --text-color: #dee2e6;
             --primary-color: #6a5acd;
+            --header-height: 70px; /* ヘッダーの高さを定義 */
+            --footer-height: 80px; /* 入力欄の高さを定義 */
         }
         
-        /* ▼▼▼ レイアウトの核となる部分を再修正 ▼▼▼ */
-        html { height: 100%; }
+        /* ▼▼▼ 安定版のレイアウト定義 ▼▼▼ */
+        html, body {
+            height: 100%;
+            overflow: hidden;
+            margin: 0;
+        }
         body {
-            font-family: 'Kalam', cursive; font-weight: 400;
-            display: flex; 
-            flex-direction: column;
+            font-family: 'Kalam', cursive; 
+            font-weight: 400;
             background-color: var(--dark-bg); 
             color: var(--text-color);
-            margin: 0;
-            /* キーボード表示に応じて変化する「動的な表示領域」に高さを追従させます */
-            height: 100dvh;
         }
-        .scratchpad-main {
-            /* ヘッダーと入力欄以外の「残りの全てのスペース」を埋めます */
-            flex-grow: 1;
-            /* 内容がスペースを超えた場合は、この要素内でのみスクロールします */
-            overflow-y: auto;
-            padding: 20px;
-        }
-        .scratchpad-header, .input-area {
-            /* ヘッダーと入力欄は縮まないように固定 */
-            flex-shrink: 0;
-        }
-        /* ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ */
 
         .scratchpad-header {
-            padding: 15px 20px; display: flex; justify-content: space-between;
-            align-items: center; border-bottom: 1px solid var(--dark-border);
+            position: fixed; /* ヘッダーを画面上部に固定 */
+            top: 0;
+            left: 0;
+            right: 0;
+            height: var(--header-height);
+            padding: 0 20px; 
+            display: flex; 
+            justify-content: space-between;
+            align-items: center; 
+            border-bottom: 1px solid var(--dark-border);
+            background-color: var(--dark-bg);
+            z-index: 10;
         }
+
+        .scratchpad-main {
+            /* ヘッダーとフッターの分だけ上下に余白を作り、コンテンツが隠れないようにする */
+            padding: var(--header-height) 20px var(--footer-height);
+            /* この要素だけがスクロールするように設定 */
+            height: 100%;
+            overflow-y: auto;
+            box-sizing: border-box; /* paddingを含めて高さを計算 */
+        }
+
+        .input-area {
+            position: fixed; /* 入力欄を画面下部に固定 */
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: var(--footer-height);
+            padding: 0 20px; 
+            border-top: 1px solid var(--dark-border);
+            display: flex; 
+            gap: 15px;
+            align-items: center;
+            background-color: var(--dark-bg);
+            z-index: 10;
+        }
+        /* ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ */
+
         .scratchpad-header h1 { font-size: 1.5rem; margin: 0; }
         .scratchpad-buttons .btn {
             width: 45px; height: 45px; border-radius: 50%; background-color: #343a40;
@@ -56,11 +82,12 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.2), inset 0 1px 1px rgba(255,255,255,0.05);
             transition: all 0.2s ease-in-out; font-size: 1.2rem;
             display: flex; justify-content: center; align-items: center;
+            padding-top: 10px; /* アイコン中央揃えのための最終調整 */
         }
         .scratchpad-buttons .btn:hover { background-color: #495057; transform: translateY(-2px); }
         .scratchpad-buttons .btn:disabled { opacity: 0.5; transform: none; cursor: not-allowed; }
         
-        #scratch-list { list-style: none; padding-left: 0; font-size: 1.6rem; line-height: 1.7; }
+        #scratch-list { list-style: none; padding-left: 0; font-size: 1.6rem; line-height: 1.7; margin: 0;}
         #scratch-list li {
             display: flex; align-items: center; position: relative;
             padding: 8px 0; cursor: pointer;
@@ -70,15 +97,11 @@
         #scratch-list li.completed .task-text { color: #6c757d; position: relative; }
         #scratch-list li.completed .task-text::after {
             content: ''; position: absolute; left: -2%; top: 55%; width: 104%; height: 2px;
-            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="4"><path d="M0,2 Q25,1 50,2 T100,2" stroke="%238d9399" stroke-width:2" fill="none"/></svg>');
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="4"><path d="M0,2 Q25,1 50,2 T100,2" stroke="%238d9399" stroke-width="2" fill="none"/></svg>');
             background-repeat: repeat-x; background-size: contain;
         }
         .task-text { position: relative; display: inline-block; }
         
-        .input-area {
-            padding: 15px 20px; border-top: 1px solid var(--dark-border);
-            display: flex; gap: 15px;
-        }
         .input-area input {
             flex-grow: 1; background-color: transparent; border: none;
             border-bottom: 2px solid var(--dark-border); color: var(--text-color);
@@ -86,13 +109,16 @@
         }
         .input-area input:focus { outline: none; border-bottom-color: var(--primary-color); }
         .input-area .btn-add {
-            flex-shrink: 0; width: 50px; height: 50px; border-radius: 50%;
-            background-color: var(--primary-color); border: none; font-size: 2rem;
-            font-weight: 700; color: white; line-height: 1;
+            width: 50px; height: 50px; font-size: 2rem;
+            padding-top: 10px;
+            flex-shrink: 0; border-radius: 50%;
+            background-color: var(--primary-color); border: none;
+            font-weight: 700; color: white;
+            display: flex; justify-content: center; align-items: center;
         }
 
         @media (max-width: 576px) {
-            .scratchpad-main { padding: 15px; }
+            .scratchpad-main { padding-left: 15px; padding-right: 15px; }
             #scratch-list { font-size: 1.3rem; }
             .input-area input { font-size: 1.2rem; }
             .scratchpad-header h1 { font-size: 1.2rem; }
@@ -118,16 +144,13 @@
     </div>
 
     <script>
-    // JavaScript部分は変更ありません
     document.addEventListener('DOMContentLoaded', () => {
         const list = document.getElementById('scratch-list');
         const input = document.getElementById('new-scratch-task');
         const addButton = document.getElementById('add-scratch-btn');
         const exportButton = document.getElementById('export-btn');
         const mainArea = document.getElementById('scratchpad-main-area');
-
         const STORAGE_KEY = 'scratchpadTasks';
-
         const urlParams = new URLSearchParams(window.location.search);
         const isNewSession = urlParams.has('new');
 
@@ -160,20 +183,16 @@
 
         const createTaskElement = (taskText, isCompleted) => {
             const li = document.createElement('li');
-            if (isCompleted) {
-                li.classList.add('completed');
-            }
+            if (isCompleted) { li.classList.add('completed'); }
             const span = document.createElement('span');
             span.className = 'task-text';
             span.textContent = taskText;
             li.appendChild(span);
-            
             li.addEventListener('click', () => {
                 li.classList.toggle('completed');
                 updateExportButtonState();
                 saveTasks();
             });
-            
             list.appendChild(li);
         };
         
@@ -194,7 +213,21 @@
         });
 
         exportButton.addEventListener('click', async () => {
-            // ... (省略)
+            const uncompletedTasks = [];
+            list.querySelectorAll('li:not(.completed) .task-text').forEach(span => {
+                uncompletedTasks.push(span.textContent);
+            });
+            if (uncompletedTasks.length === 0) { return; }
+            try {
+                const response = await fetch("{{ url_for('export_scratchpad') }}", {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tasks: uncompletedTasks }),
+                });
+                if (!response.ok) { throw new Error('書き出しに失敗しました。'); }
+                localStorage.removeItem(STORAGE_KEY);
+                window.location.href = "{{ url_for('todo_list') }}";
+            } catch (error) { console.error('Export error:', error); }
         });
 
         loadTasks();
@@ -202,4 +235,3 @@
     </script>
 </body>
 </html>
-

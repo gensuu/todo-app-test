@@ -110,6 +110,7 @@
         </div>
     </main>
 
+    <!-- Right Sidebar (Desktop/Tablet) -->
     <aside class="col-md-3 d-none d-md-block sidebar-right">
         <div class="sidebar-sticky">
             <div class="card calendar-card mb-4">
@@ -178,7 +179,7 @@
     </aside>
 </div>
 
-{# --- スマホ用フッターナビゲーション --- #}
+<!-- Mobile Bottom Navigation -->
 <nav class="d-md-none navbar fixed-bottom navbar-dark bg-dark">
     <div class="container-fluid justify-content-around">
         <a href="{{ url_for('scratchpad', new='true') }}" class="btn btn-secondary scratchpad-btn-mobile" title="今からTodo"><i class="bi bi-pencil-square"></i></a>
@@ -190,7 +191,7 @@
     </div>
 </nav>
 
-{# --- タスク詳細モーダル (変更なし) --- #}
+<!-- Task Focus Modal -->
 <div class="modal fade" id="taskFocusModal" tabindex="-1" aria-labelledby="taskFocusModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
@@ -221,12 +222,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 location.reload();
             } catch (error) {
                 console.error('タスク更新エラー:', error);
-                alert('タスクの更新に失敗しました。');
             }
         });
     });
 
-    // 進捗サークルの描画
+    // 進捗サークルの表示
     const circle = document.querySelector('.progress-circle');
     if (circle) {
         const total = parseInt("{{ total_grid_count or 0 }}", 10);
@@ -236,7 +236,7 @@ document.addEventListener('DOMContentLoaded', () => {
         circle.style.setProperty('--progress', `${progress}%`);
     }
 
-    // タスクフォーカスモーダルの処理
+    // タスク詳細モーダルの処理
     const taskFocusModal = document.getElementById('taskFocusModal');
     if (taskFocusModal) {
         let toggledSubtaskIds = new Set();
@@ -308,7 +308,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 location.reload();
             } catch (error) {
                 console.error('一括タスク更新エラー:', error);
-                alert('タスクの更新中にエラーが発生しました。');
             }
         });
     }
