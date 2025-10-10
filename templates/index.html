@@ -9,7 +9,7 @@
         <div class="sidebar-sticky">
             <h2 class="sidebar-title">メニュー</h2>
             <nav class="nav flex-column">
-                <a class="nav-link btn btn-secondary text-start mb-2 scratchpad-btn" href="{{ url_for('scratchpad') }}">
+                <a class="nav-link btn btn-secondary text-start mb-2 scratchpad-btn" href="{{ url_for('scratchpad', new='true') }}">
                     <i class="bi bi-pencil-square"></i> 今からTodoの開始
                 </a>
                 <a class="nav-link btn btn-primary text-start mb-2" href="{{ url_for('add_or_edit_task', date_str=current_date.strftime('%Y-%m-%d')) }}">
@@ -178,9 +178,10 @@
     </aside>
 </div>
 
+{# --- スマホ用フッターナビゲーション --- #}
 <nav class="d-md-none navbar fixed-bottom navbar-dark bg-dark">
     <div class="container-fluid justify-content-around">
-        <a href="{{ url_for('scratchpad') }}" class="btn btn-secondary scratchpad-btn-mobile" title="今からTodo"><i class="bi bi-pencil-square"></i></a>
+        <a href="{{ url_for('scratchpad', new='true') }}" class="btn btn-secondary scratchpad-btn-mobile" title="今からTodo"><i class="bi bi-pencil-square"></i></a>
         <a href="{{ url_for('add_or_edit_task', date_str=current_date.strftime('%Y-%m-%d')) }}" class="btn btn-primary" title="新しいタスクを追加"><i class="bi bi-plus-circle-fill"></i></a>
         <form action="{{ url_for('export_to_sheet') }}" method="post" class="d-grid">
             <button type="submit" class="btn btn-success" title="スプレッドシートへ書き出し"><i class="bi bi-file-earmark-spreadsheet-fill"></i></button>
@@ -189,6 +190,7 @@
     </div>
 </nav>
 
+{# --- タスク詳細モーダル (変更なし) --- #}
 <div class="modal fade" id="taskFocusModal" tabindex="-1" aria-labelledby="taskFocusModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
@@ -224,6 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // 進捗サークルの描画
     const circle = document.querySelector('.progress-circle');
     if (circle) {
         const total = parseInt("{{ total_grid_count or 0 }}", 10);
@@ -233,6 +236,7 @@ document.addEventListener('DOMContentLoaded', () => {
         circle.style.setProperty('--progress', `${progress}%`);
     }
 
+    // タスクフォーカスモーダルの処理
     const taskFocusModal = document.getElementById('taskFocusModal');
     if (taskFocusModal) {
         let toggledSubtaskIds = new Set();

@@ -5,189 +5,80 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>今からTodo</title>
     
-    {# --- 必要なCSSライブラリを直接読み込む --- #}
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     
-    {# --- このページ専用のGoogle Fontを読み込む --- #}
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@300;400;700&display=swap" rel="stylesheet">
 
     <style>
-        /* --- 基本設定 --- */
         :root {
             --dark-bg: #212529;
             --dark-border: #444;
             --text-color: #dee2e6;
-            --primary-color: #6a5acd; /* ボタンのアクセントカラー */
+            --primary-color: #6a5acd;
         }
-        html, body {
-            height: 100%;
-            overflow: hidden; /* スクロールバーを隠す */
-        }
+        html { height: 100%; }
         body {
-            font-family: 'Kalam', cursive;
-            font-weight: 400;
-            display: flex;
-            flex-direction: column;
-            background-color: var(--dark-bg);
-            color: var(--text-color);
-            margin: 0;
+            font-family: 'Kalam', cursive; font-weight: 400;
+            display: flex; flex-direction: column;
+            background-color: var(--dark-bg); color: var(--text-color);
+            margin: 0; height: 100dvh;
         }
-
-        /* --- ヘッダー --- */
         .scratchpad-header {
-            padding: 15px 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid var(--dark-border);
+            padding: 15px 20px; display: flex; justify-content: space-between;
+            align-items: center; border-bottom: 1px solid var(--dark-border);
             flex-shrink: 0;
         }
-        .scratchpad-header h1 {
-            font-size: 1.5rem;
-            margin: 0;
-        }
+        .scratchpad-header h1 { font-size: 1.5rem; margin: 0; }
         .scratchpad-buttons .btn {
-            width: 45px;
-            height: 45px;
-            border-radius: 50%;
-            background-color: #343a40;
-            border: 1px solid #495057;
-            color: var(--text-color);
+            width: 45px; height: 45px; border-radius: 50%; background-color: #343a40;
+            border: 1px solid #495057; color: var(--text-color);
             box-shadow: 0 2px 5px rgba(0,0,0,0.2), inset 0 1px 1px rgba(255,255,255,0.05);
-            transition: all 0.2s ease-in-out;
-            font-size: 1.2rem;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            transition: all 0.2s ease-in-out; font-size: 1.2rem;
+            display: flex; justify-content: center; align-items: center;
         }
-        .scratchpad-buttons .btn:hover {
-            background-color: #495057;
-            transform: translateY(-2px);
-        }
-        .scratchpad-buttons .btn:disabled {
-            opacity: 0.5;
-            transform: none;
-            cursor: not-allowed;
-        }
+        .scratchpad-buttons .btn:hover { background-color: #495057; transform: translateY(-2px); }
+        .scratchpad-buttons .btn:disabled { opacity: 0.5; transform: none; cursor: not-allowed; }
         
-        /* --- メインコンテンツ（タスクリスト） --- */
-        .scratchpad-main {
-            flex-grow: 1;
-            overflow-y: auto;
-            padding: 20px;
-        }
-        #scratch-list {
-            list-style: none;
-            padding-left: 0;
-            font-size: 1.6rem;
-            line-height: 1.7;
-        }
+        .scratchpad-main { flex-grow: 1; overflow-y: auto; padding: 20px; }
+        #scratch-list { list-style: none; padding-left: 0; font-size: 1.6rem; line-height: 1.7; }
         #scratch-list li {
-            display: flex;
-            align-items: center;
-            position: relative;
-            padding: 8px 0;
-            cursor: pointer;
+            display: flex; align-items: center; position: relative;
+            padding: 8px 0; cursor: pointer;
         }
-        #scratch-list li::before {
-            content: '•';
-            margin-right: 15px;
-            color: #6c757d;
-            transition: color 0.2s;
-        }
-        #scratch-list li:hover::before {
-            color: #adb5bd;
-        }
-        #scratch-list li.completed .task-text {
-            color: #6c757d;
-            position: relative;
-        }
+        #scratch-list li::before { content: '•'; margin-right: 15px; color: #6c757d; transition: color 0.2s; }
+        #scratch-list li:hover::before { color: #adb5bd; }
+        #scratch-list li.completed .task-text { color: #6c757d; position: relative; }
         #scratch-list li.completed .task-text::after {
-            content: '';
-            position: absolute;
-            left: -2%;
-            top: 55%;
-            width: 104%;
-            height: 2px;
+            content: ''; position: absolute; left: -2%; top: 55%; width: 104%; height: 2px;
             background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="4"><path d="M0,2 Q25,1 50,2 T100,2" stroke="%238d9399" stroke-width="2" fill="none"/></svg>');
-            background-repeat: repeat-x;
-            background-size: contain;
+            background-repeat: repeat-x; background-size: contain;
         }
-        .task-text {
-            position: relative;
-            display: inline-block;
-        }
+        .task-text { position: relative; display: inline-block; }
         
-        /* --- 入力エリア --- */
         .input-area {
-            padding: 15px 20px;
-            border-top: 1px solid var(--dark-border);
-            display: flex;
-            gap: 15px;
-            flex-shrink: 0;
+            padding: 15px 20px; border-top: 1px solid var(--dark-border);
+            display: flex; gap: 15px; flex-shrink: 0;
         }
         .input-area input {
-            flex-grow: 1;
-            background-color: transparent;
-            border: none;
-            border-bottom: 2px solid var(--dark-border);
-            color: var(--text-color);
-            font-size: 1.5rem;
-            font-family: 'Kalam', cursive;
-            padding: 5px 0;
+            flex-grow: 1; background-color: transparent; border: none;
+            border-bottom: 2px solid var(--dark-border); color: var(--text-color);
+            font-size: 1.5rem; font-family: 'Kalam', cursive; padding: 5px 0;
         }
-        .input-area input:focus {
-            outline: none;
-            border-bottom-color: var(--primary-color);
-        }
+        .input-area input:focus { outline: none; border-bottom-color: var(--primary-color); }
         .input-area .btn-add {
-            flex-shrink: 0;
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            background-color: var(--primary-color);
-            border: none;
-            font-size: 2rem;
-            font-weight: 700;
-            color: white;
-            line-height: 1;
+            flex-shrink: 0; width: 50px; height: 50px; border-radius: 50%;
+            background-color: var(--primary-color); border: none; font-size: 2rem;
+            font-weight: 700; color: white; line-height: 1;
         }
 
-        /* --- スマホ向けレスポンシブ対応 --- */
         @media (max-width: 576px) {
-            .scratchpad-main {
-                padding: 15px;
-            }
-            #scratch-list {
-                font-size: 1.3rem;
-            }
-            .input-area input {
-                font-size: 1.2rem;
-            }
-            .scratchpad-header h1 {
-                font-size: 1.2rem;
-            }
-        }
-
-        /* --- 通知バーのスタイル --- */
-        .custom-alert {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 1050;
-            min-width: 300px;
-            text-align: center;
-            animation: fadeInOut 4s ease-in-out;
-        }
-        @keyframes fadeInOut {
-            0% { top: -50px; opacity: 0; }
-            15% { top: 20px; opacity: 1; }
-            85% { top: 20px; opacity: 1; }
-            100% { top: -50px; opacity: 0; }
+            .scratchpad-main { padding: 15px; }
+            #scratch-list { font-size: 1.3rem; }
+            .input-area input { font-size: 1.2rem; }
+            .scratchpad-header h1 { font-size: 1.2rem; }
         }
     </style>
 </head>
@@ -200,10 +91,8 @@
         </div>
     </header>
 
-    <main class="scratchpad-main">
-        <ul id="scratch-list">
-            <!-- JavaScriptでタスクが追加されます -->
-        </ul>
+    <main class="scratchpad-main" id="scratchpad-main-area">
+        <ul id="scratch-list"></ul>
     </main>
 
     <div class="input-area">
@@ -217,13 +106,36 @@
         const input = document.getElementById('new-scratch-task');
         const addButton = document.getElementById('add-scratch-btn');
         const exportButton = document.getElementById('export-btn');
+        const mainArea = document.getElementById('scratchpad-main-area');
 
-        const showAlert = (message, type = 'danger') => {
-            const alertDiv = document.createElement('div');
-            alertDiv.className = `alert alert-${type} custom-alert`;
-            alertDiv.textContent = message;
-            document.body.appendChild(alertDiv);
-            setTimeout(() => { alertDiv.remove(); }, 4000);
+        const STORAGE_KEY = 'scratchpadTasks';
+
+        // URLに ?new=true が含まれているかチェック
+        const urlParams = new URLSearchParams(window.location.search);
+        const isNewSession = urlParams.has('new');
+
+        if (isNewSession) {
+            // 新しいセッションの場合、ローカルストレージをクリア
+            localStorage.removeItem(STORAGE_KEY);
+            // リロード時に再度クリアされないよう、URLからパラメータを削除
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+
+        const saveTasks = () => {
+            const tasks = [];
+            list.querySelectorAll('li').forEach(li => {
+                tasks.push({
+                    text: li.querySelector('.task-text').textContent,
+                    completed: li.classList.contains('completed')
+                });
+            });
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+        };
+
+        const loadTasks = () => {
+            const savedTasks = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            savedTasks.forEach(task => createTaskElement(task.text, task.completed));
+            updateExportButtonState();
         };
 
         const updateExportButtonState = () => {
@@ -231,11 +143,11 @@
             exportButton.disabled = uncompletedTasks === 0;
         };
 
-        const addTask = () => {
-            const taskText = input.value.trim();
-            if (taskText === '') return;
-
+        const createTaskElement = (taskText, isCompleted) => {
             const li = document.createElement('li');
+            if (isCompleted) {
+                li.classList.add('completed');
+            }
             const span = document.createElement('span');
             span.className = 'task-text';
             span.textContent = taskText;
@@ -244,20 +156,26 @@
             li.addEventListener('click', () => {
                 li.classList.toggle('completed');
                 updateExportButtonState();
+                saveTasks();
             });
             
             list.appendChild(li);
+        };
+        
+        const addTask = () => {
+            const taskText = input.value.trim();
+            if (taskText === '') return;
+            createTaskElement(taskText, false);
             input.value = '';
             input.focus();
             updateExportButtonState();
+            saveTasks();
+            mainArea.scrollTop = mainArea.scrollHeight;
         };
 
         addButton.addEventListener('click', addTask);
         input.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                addTask();
-            }
+            if (e.key === 'Enter') { e.preventDefault(); addTask(); }
         });
 
         exportButton.addEventListener('click', async () => {
@@ -267,7 +185,6 @@
             });
 
             if (uncompletedTasks.length === 0) {
-                showAlert('書き出す未完了タスクがありません。', 'warning');
                 return;
             }
 
@@ -278,16 +195,21 @@
                     body: JSON.stringify({ tasks: uncompletedTasks }),
                 });
                 if (!response.ok) {
-                     const errorData = await response.json();
-                     throw new Error(errorData.message || '書き出しに失敗しました。');
+                    throw new Error('書き出しに失敗しました。');
                 }
+                // 書き出しが成功したら、ローカルストレージもクリア
+                localStorage.removeItem(STORAGE_KEY);
                 window.location.href = "{{ url_for('todo_list') }}";
             } catch (error) {
                 console.error('Export error:', error);
-                showAlert(error.message);
+                // ここでカスタムアラートを出すのが望ましい
             }
         });
+
+        // ページ読み込み時にタスクを復元
+        loadTasks();
     });
     </script>
 </body>
 </html>
+
