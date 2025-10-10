@@ -22,7 +22,6 @@
             --footer-height: 80px;
         }
         
-        /* ▼▼▼ 新しいレイアウトアプローチ ▼▼▼ */
         html, body {
             height: 100%;
             overflow: hidden;
@@ -38,7 +37,7 @@
         }
 
         .scratchpad-header {
-            position: fixed; /* ヘッダーを画面上部に固定 */
+            position: fixed;
             top: 0;
             left: 0;
             right: 0;
@@ -53,16 +52,14 @@
         }
 
         .scratchpad-main {
-            /* ヘッダーとフッターの分だけ上下に余白を作り、コンテンツが隠れないようにする */
             padding: var(--header-height) 20px var(--footer-height);
-            /* この要素だけがスクロールするように設定 */
             height: 100%;
             overflow-y: auto;
-            box-sizing: border-box; /* paddingを含めて高さを計算 */
+            box-sizing: border-box;
         }
 
         .input-area {
-            position: fixed; /* 入力欄を画面下部に固定（JSで位置を制御） */
+            position: fixed;
             bottom: 0;
             left: 0;
             right: 0;
@@ -74,9 +71,8 @@
             align-items: center;
             background-color: var(--dark-bg);
             z-index: 10;
-            transition: bottom 0.2s ease-out; /* 位置が変わる際にアニメーション */
+            transition: bottom 0.2s ease-out;
         }
-        /* ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ */
 
         .scratchpad-header h1 { font-size: 1.5rem; margin: 0; }
         .scratchpad-buttons .btn {
@@ -150,7 +146,6 @@
 
     <script>
     document.addEventListener('DOMContentLoaded', () => {
-        // --- 要素の取得 ---
         const list = document.getElementById('scratch-list');
         const input = document.getElementById('new-scratch-task');
         const addButton = document.getElementById('add-scratch-btn');
@@ -159,7 +154,6 @@
         const inputArea = document.getElementById('input-area');
         const STORAGE_KEY = 'scratchpadTasks';
 
-        // --- 全ての関数を先に定義 ---
         const saveTasks = () => {
             const tasks = [];
             list.querySelectorAll('li').forEach(li => {
@@ -205,15 +199,16 @@
         const addTask = () => {
             const taskText = input.value.trim();
             if (taskText === '') return;
-            const newTaskElement = createTaskElement(taskText, false);
+            createTaskElement(taskText, false);
             input.value = '';
             input.focus();
             updateExportButtonState();
             saveTasks();
-            newTaskElement.scrollIntoView({ behavior: "smooth", block: "start" });
+            
+            // ▼▼▼ リストの一番下までスムーズにスクロール ▼▼▼
+            mainArea.scrollTo({ top: mainArea.scrollHeight, behavior: 'smooth' });
         };
         
-        // --- 初期化処理とイベントリスナー ---
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.has('new')) {
             localStorage.removeItem(STORAGE_KEY);
@@ -240,14 +235,16 @@
             } catch (error) { console.error('Export error:', error); }
         });
 
-        // --- ▼▼▼ 新しいキーボード追従機能 ▼▼▼ ---
         if (window.visualViewport) {
+            const initialHeight = window.visualViewport.height;
             window.visualViewport.addEventListener('resize', () => {
-                // キーボードの高さを計算 (レイアウト全体の高さ - 見えている領域の高さ)
-                const keyboardHeight = document.documentElement.clientHeight - window.visualViewport.height;
-                
-                // 計算されたキーボードの高さ分だけ、入力欄を上に押し上げる
-                inputArea.style.bottom = keyboardHeight + 'px';
+                const newHeight = window.visualViewport.height;
+                const keyboardHeight = initialHeight - newHeight;
+                if (keyboardHeight > 100) {
+                    inputArea.style.bottom = keyboardHeight + 'px';
+                } else {
+                    inputArea.style.bottom = '0px';
+                }
             });
         }
     });
