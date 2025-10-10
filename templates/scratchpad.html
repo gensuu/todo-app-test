@@ -90,23 +90,25 @@
         
         #scratch-list { list-style: none; padding-left: 0; font-size: 1.6rem; line-height: 1.7; margin: 0;}
         
-        /* ▼▼▼ 欠落していたスタイルをここに追加 ▼▼▼ */
         #scratch-list li {
             display: flex;
             align-items: center;
             position: relative;
             padding: 8px 0;
-            cursor: pointer;
         }
-        #scratch-list li::before {
-            content: '•';
+        /* ▼▼▼ クリック範囲を修正するための新しいスタイル ▼▼▼ */
+        .bullet {
             margin-right: 15px;
             color: #6c757d;
             transition: color 0.2s;
+            cursor: pointer;
+            padding: 5px; /* タップしやすくするための透明な余白 */
         }
-        #scratch-list li:hover::before {
+        .bullet:hover {
             color: #adb5bd;
         }
+        /* ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ */
+
         #scratch-list li.completed .task-text {
             color: #6c757d;
             position: relative;
@@ -126,7 +128,6 @@
             position: relative;
             display: inline-block;
         }
-        /* ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ */
 
         .input-area input {
             flex-grow: 1; background-color: transparent; border: none;
@@ -181,7 +182,7 @@
         const inputArea = document.getElementById('input-area');
         const STORAGE_KEY = 'scratchpadTasks';
 
-        // --- 関数の定義 ---
+        // --- 全ての関数を先に定義 ---
 
         const saveTasks = () => {
             const tasks = [];
@@ -202,15 +203,25 @@
         const createTaskElement = (taskText, isCompleted) => {
             const li = document.createElement('li');
             if (isCompleted) { li.classList.add('completed'); }
-            const span = document.createElement('span');
-            span.className = 'task-text';
-            span.textContent = taskText;
-            li.appendChild(span);
-            li.addEventListener('click', () => {
+
+            // ▼▼▼ クリック範囲を修正 ▼▼▼
+            const bullet = document.createElement('span');
+            bullet.className = 'bullet';
+            bullet.innerHTML = '•';
+            // 丸い点だけをクリックイベントの対象にする
+            bullet.addEventListener('click', () => {
                 li.classList.toggle('completed');
                 updateExportButtonState();
                 saveTasks();
             });
+
+            const span = document.createElement('span');
+            span.className = 'task-text';
+            span.textContent = taskText;
+
+            li.appendChild(bullet);
+            li.appendChild(span);
+            // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
             list.appendChild(li);
         };
         
@@ -270,14 +281,12 @@
         // 書き出しイベント
         exportButton.addEventListener('click', exportTasks);
         
-        // キーボード追従機能
+        // ▼▼▼ 確実なキーボード追従機能 ▼▼▼
         if (window.visualViewport) {
-            const initialHeight = window.visualViewport.height;
-
             window.visualViewport.addEventListener('resize', () => {
-                const newHeight = window.visualViewport.height;
-                // キーボードが表示された（画面が縮んだ）か、元のサイズに戻ったかを判断
-                const keyboardHeight = Math.max(0, initialHeight - newHeight);
+                // 現在のウィンドウの高さと、実際の表示領域の高さを比較
+                const keyboardHeight = Math.max(0, window.innerHeight - window.visualViewport.height);
+                // 計算したキーボードの高さ分だけ、入力欄を上に押し上げる
                 inputArea.style.bottom = keyboardHeight + 'px';
             });
         }
