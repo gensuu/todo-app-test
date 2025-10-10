@@ -33,13 +33,8 @@
             font-weight: 400;
             background-color: var(--dark-bg); 
             color: var(--text-color);
-            position: relative;
-        }
-
-        .content-wrapper {
             display: flex;
             flex-direction: column;
-            height: 100%;
         }
 
         .scratchpad-header {
@@ -57,14 +52,10 @@
             flex-grow: 1;
             overflow-y: auto;
             padding: 20px;
-            padding-bottom: var(--footer-height);
         }
 
         .input-area {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
+            flex-shrink: 0;
             height: var(--footer-height);
             padding: 0 20px; 
             border-top: 1px solid var(--dark-border);
@@ -73,9 +64,9 @@
             align-items: center;
             background-color: var(--dark-bg);
             z-index: 10;
-            transition: bottom 0.2s ease-out;
         }
 
+        /* --- その他のスタイル --- */
         .scratchpad-header h1 { font-size: 1.5rem; margin: 0; }
         .scratchpad-buttons .btn {
             width: 45px; height: 45px; border-radius: 50%; background-color: #343a40;
@@ -90,45 +81,6 @@
         
         #scratch-list { list-style: none; padding-left: 0; font-size: 1.6rem; line-height: 1.7; margin: 0;}
         
-        #scratch-list li {
-            display: flex;
-            align-items: center;
-            position: relative;
-            padding: 8px 0;
-        }
-        /* ▼▼▼ クリック範囲を修正するための新しいスタイル ▼▼▼ */
-        .bullet {
-            margin-right: 15px;
-            color: #6c757d;
-            transition: color 0.2s;
-            cursor: pointer;
-            padding: 5px; /* タップしやすくするための透明な余白 */
-        }
-        .bullet:hover {
-            color: #adb5bd;
-        }
-        /* ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ */
-
-        #scratch-list li.completed .task-text {
-            color: #6c757d;
-            position: relative;
-        }
-        #scratch-list li.completed .task-text::after {
-            content: '';
-            position: absolute;
-            left: -2%;
-            top: 55%;
-            width: 104%;
-            height: 2px;
-            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="4"><path d="M0,2 Q25,1 50,2 T100,2" stroke="%238d9399" stroke-width="2" fill="none"/></svg>');
-            background-repeat: repeat-x;
-            background-size: contain;
-        }
-        .task-text {
-            position: relative;
-            display: inline-block;
-        }
-
         .input-area input {
             flex-grow: 1; background-color: transparent; border: none;
             border-bottom: 2px solid var(--dark-border); color: var(--text-color);
@@ -152,7 +104,7 @@
     </style>
 </head>
 <body>
-    <div class="content-wrapper">
+    <div class="content-wrapper" style="display: flex; flex-direction: column; height: 100%;">
         <header class="scratchpad-header">
             <h1><i class="bi bi-pencil-square"></i> 今からTodo</h1>
             <div class="scratchpad-buttons d-flex gap-2">
@@ -179,7 +131,6 @@
         const addButton = document.getElementById('add-scratch-btn');
         const exportButton = document.getElementById('export-btn');
         const mainArea = document.getElementById('scratchpad-main-area');
-        const inputArea = document.getElementById('input-area');
         const STORAGE_KEY = 'scratchpadTasks';
 
         // --- 全ての関数を先に定義 ---
@@ -203,25 +154,15 @@
         const createTaskElement = (taskText, isCompleted) => {
             const li = document.createElement('li');
             if (isCompleted) { li.classList.add('completed'); }
-
-            // ▼▼▼ クリック範囲を修正 ▼▼▼
-            const bullet = document.createElement('span');
-            bullet.className = 'bullet';
-            bullet.innerHTML = '•';
-            // 丸い点だけをクリックイベントの対象にする
-            bullet.addEventListener('click', () => {
+            const span = document.createElement('span');
+            span.className = 'task-text';
+            span.textContent = taskText;
+            li.appendChild(span);
+            li.addEventListener('click', () => {
                 li.classList.toggle('completed');
                 updateExportButtonState();
                 saveTasks();
             });
-
-            const span = document.createElement('span');
-            span.className = 'task-text';
-            span.textContent = taskText;
-
-            li.appendChild(bullet);
-            li.appendChild(span);
-            // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
             list.appendChild(li);
         };
         
@@ -240,24 +181,6 @@
             updateExportButtonState();
             saveTasks();
             mainArea.scrollTop = mainArea.scrollHeight;
-        };
-        
-        const exportTasks = async () => {
-            const uncompletedTasks = [];
-            list.querySelectorAll('li:not(.completed) .task-text').forEach(span => {
-                uncompletedTasks.push(span.textContent);
-            });
-            if (uncompletedTasks.length === 0) { return; }
-            try {
-                const response = await fetch("{{ url_for('export_scratchpad') }}", {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ tasks: uncompletedTasks }),
-                });
-                if (!response.ok) { throw new Error('書き出しに失敗しました。'); }
-                localStorage.removeItem(STORAGE_KEY);
-                window.location.href = "{{ url_for('todo_list') }}";
-            } catch (error) { console.error('Export error:', error); }
         };
 
         // --- 初期化処理とイベントリスナー ---
@@ -279,17 +202,23 @@
         });
 
         // 書き出しイベント
-        exportButton.addEventListener('click', exportTasks);
-        
-        // ▼▼▼ 確実なキーボード追従機能 ▼▼▼
-        if (window.visualViewport) {
-            window.visualViewport.addEventListener('resize', () => {
-                // 現在のウィンドウの高さと、実際の表示領域の高さを比較
-                const keyboardHeight = Math.max(0, window.innerHeight - window.visualViewport.height);
-                // 計算したキーボードの高さ分だけ、入力欄を上に押し上げる
-                inputArea.style.bottom = keyboardHeight + 'px';
+        exportButton.addEventListener('click', async () => {
+            const uncompletedTasks = [];
+            list.querySelectorAll('li:not(.completed) .task-text').forEach(span => {
+                uncompletedTasks.push(span.textContent);
             });
-        }
+            if (uncompletedTasks.length === 0) { return; }
+            try {
+                const response = await fetch("{{ url_for('export_scratchpad') }}", {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tasks: uncompletedTasks }),
+                });
+                if (!response.ok) { throw new Error('書き出しに失敗しました。'); }
+                localStorage.removeItem(STORAGE_KEY);
+                window.location.href = "{{ url_for('todo_list') }}";
+            } catch (error) { console.error('Export error:', error); }
+        });
     });
     </script>
 </body>
