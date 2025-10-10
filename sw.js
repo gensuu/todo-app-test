@@ -1,6 +1,5 @@
-// ▼▼▼ キャッシュのバージョンを v3 に更新 ▼▼▼
-const CACHE_NAME = 'todo-grid-cache-v3';
-// ▼▼▼ アイコンファイルもキャッシュ対象に追加 ▼▼▼
+// ▼▼▼ キャッシュのバージョンを v4 に更新 ▼▼▼
+const CACHE_NAME = 'todo-grid-cache-v4';
 const urlsToCache = [
   '/',
   '/todo',
@@ -38,9 +37,6 @@ self.addEventListener('activate', event => {
   );
 });
 
-// ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
-// ★ キャッシュ戦略を修正 ★
-// ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
 self.addEventListener('fetch', event => {
   // http/https以外のGETリクエストは無視
   if (event.request.method !== 'GET' || !event.request.url.startsWith('http')) {
@@ -60,7 +56,6 @@ self.addEventListener('fetch', event => {
     event.respondWith(
       caches.open(CACHE_NAME).then(cache => {
         return cache.match(event.request).then(response => {
-          // キャッシュにあればそれを返す。なければネットワークから取得してキャッシュに保存。
           return response || fetch(event.request).then(networkResponse => {
             cache.put(event.request, networkResponse.clone());
             return networkResponse;
@@ -71,23 +66,25 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // HTMLページは「Stale-While-Revalidate」戦略
+  // ★★★ ここからが修正箇所 ★★★
+  // HTMLページは「Network First, falling back to Cache」戦略
   event.respondWith(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.match(event.request).then(response => {
-        const fetchPromise = fetch(event.request).then(networkResponse => {
-          // 正常なレスポンス(200 OK)の場合のみキャッシュに保存
-          if (networkResponse && networkResponse.status === 200) {
-            cache.put(event.request, networkResponse.clone());
-          }
-          return networkResponse;
-        }).catch(err => {
-          console.warn('Network request failed, probably offline:', err);
-        });
-        // キャッシュがあればそれを返しつつ、裏でネットワークに更新を確認
-        return response || fetchPromise;
-      });
-    })
+    // まずネットワークからの取得を試みる
+    fetch(event.request)
+      .then(networkResponse => {
+        // 正常なレスポンス(200 OK)の場合のみキャッシュに保存
+        if (networkResponse && networkResponse.status === 200) {
+          const responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then(cache => {
+            cache.put(event.request, responseToCache);
+          });
+        }
+        return networkResponse;
+      })
+      .catch(error => {
+        // ネットワークに失敗した場合、キャッシュから取得を試みる
+        console.log('Network request failed, trying to serve from cache.', error);
+        return caches.match(event.request);
+      })
   );
 });
-
