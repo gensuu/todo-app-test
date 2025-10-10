@@ -19,13 +19,21 @@
             --text-color: #dee2e6;
             --primary-color: #6a5acd;
         }
-        html { height: 100%; }
+        
+        /* ▼▼▼ この部分を修正しました ▼▼▼ */
+        html, body {
+            height: 100%;
+            overflow: hidden; /* ページ全体のスクロールを禁止 */
+        }
         body {
             font-family: 'Kalam', cursive; font-weight: 400;
             display: flex; flex-direction: column;
             background-color: var(--dark-bg); color: var(--text-color);
-            margin: 0; height: 100dvh;
+            margin: 0;
+            /* height: 100% は上記のルールから継承されます */
         }
+        /* ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ */
+
         .scratchpad-header {
             padding: 15px 20px; display: flex; justify-content: space-between;
             align-items: center; border-bottom: 1px solid var(--dark-border);
