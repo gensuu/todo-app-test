@@ -242,6 +242,8 @@
 
         // キーボード追従機能
         if (window.visualViewport) {
+            // ページ読み込み時にも一度実行
+            handleViewportResize();
             window.visualViewport.addEventListener('resize', handleViewportResize);
         }
     });
