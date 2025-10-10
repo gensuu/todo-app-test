@@ -255,6 +255,7 @@ def service_worker():
 @app.route('/todo/<date_str>')
 @login_required
 def todo_list(date_str=None):
+    calendar.setfirstweekday(calendar.SUNDAY) # カレンダーを日曜始まりに設定
     cleanup_old_tasks(current_user.id)
     if date_str is None:
         target_date = get_jst_today()
@@ -345,7 +346,7 @@ def add_or_edit_task(master_id=None):
                     db.session.add(SubtaskTemplate(template_id=template.id, content=sub_content, grid_count=int(grid_count_str)))
                     subtask_count += 1
             if subtask_count == 0:
-                 flash("サブタスクが1つもないため、テンプレートは保存されませんでした。"); db.session.rollback(); return redirect(request.url)
+                flash("サブタスクが1つもないため、テンプレートは保存されませんでした。"); db.session.rollback(); return redirect(request.url)
             db.session.commit()
             flash(f"テンプレート「{template_title}」を保存しました。"); return redirect(url_for('manage_templates'))
         master_title, due_date_str = request.form.get('master_title'), request.form.get('due_date')
@@ -515,7 +516,7 @@ def export_to_sheet():
         worksheet = sh.sheet1
         header = ['主タスクID', '主タスク', 'サブタスク内容', 'マス数', '期限日', '完了日', '遅れた日数']
         if not worksheet.row_values(1):
-             worksheet.append_row(header)
+            worksheet.append_row(header)
         existing_records = worksheet.get_all_values()[1:]
         existing_keys = set( (rec[1], rec[2], rec[5]) for rec in existing_records )
         data_to_append = []

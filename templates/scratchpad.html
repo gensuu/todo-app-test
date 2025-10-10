@@ -18,52 +18,62 @@
             --dark-border: #444;
             --text-color: #dee2e6;
             --primary-color: #6a5acd;
+            --header-height: 70px;
+            --footer-height: 80px;
         }
         
-        /* ▼▼▼ 新しいレイアウトの核となる部分 ▼▼▼ */
-        html {
+        /* ▼▼▼ 新しい安定版レイアウト ▼▼▼ */
+        html, body {
             height: 100%;
+            overflow: hidden;
+            margin: 0;
         }
         body {
             font-family: 'Kalam', cursive; 
             font-weight: 400;
             background-color: var(--dark-bg); 
             color: var(--text-color);
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-
-            /* Flexboxレイアウトを適用し、画面全体をコンテナとする */
-            display: flex;
-            flex-direction: column;
-            height: 100vh; 
         }
 
         .scratchpad-header {
-            flex-shrink: 0; /* この要素は縮まない */
-            padding: 15px 20px; 
+            position: fixed; /* ヘッダーを画面上部に固定 */
+            top: 0;
+            left: 0;
+            right: 0;
+            height: var(--header-height);
+            padding: 0 20px; 
             display: flex; 
             justify-content: space-between;
             align-items: center; 
             border-bottom: 1px solid var(--dark-border);
+            background-color: var(--dark-bg);
+            z-index: 10;
         }
 
         .scratchpad-main {
-            flex-grow: 1; /* 残りの利用可能なスペースをすべて埋める */
-            overflow-y: auto; /* 内容が溢れた場合は、この要素内でのみスクロール */
-            padding: 20px;
+            /* ヘッダーとフッターの分だけ上下に余白を作り、コンテンツが隠れないようにする */
+            padding: var(--header-height) 20px var(--footer-height);
+            /* この要素だけがスクロールするように設定 */
+            height: 100%;
+            overflow-y: auto;
+            box-sizing: border-box; /* paddingを含めて高さを計算 */
         }
 
         .input-area {
-            flex-shrink: 0; /* この要素は縮まない */
-            padding: 15px 20px; 
+            position: fixed; /* 入力欄を画面下部に固定 */
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: var(--footer-height);
+            padding: 0 20px; 
             border-top: 1px solid var(--dark-border);
             display: flex; 
             gap: 15px;
             align-items: center;
-            background-color: var(--dark-bg); /* 背景色を指定して下のコンテンツを隠す */
+            background-color: var(--dark-bg);
+            z-index: 10;
         }
-        /* ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ */
+        /* ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ */
 
         .scratchpad-header h1 { font-size: 1.5rem; margin: 0; }
         .scratchpad-buttons .btn {
