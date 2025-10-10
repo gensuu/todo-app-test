@@ -20,24 +20,40 @@
             --primary-color: #6a5acd;
         }
         
-        /* ▼▼▼ この部分を修正しました ▼▼▼ */
-        html, body {
+        /* ▼▼▼ ここからが今回の重要な修正箇所です ▼▼▼ */
+        html {
+            /* ページ全体の高さを確保 */
             height: 100%;
-            overflow: hidden; /* ページ全体のスクロールを禁止 */
         }
         body {
             font-family: 'Kalam', cursive; font-weight: 400;
-            display: flex; flex-direction: column;
-            background-color: var(--dark-bg); color: var(--text-color);
+            display: flex; 
+            flex-direction: column;
+            background-color: var(--dark-bg); 
+            color: var(--text-color);
             margin: 0;
-            /* height: 100% は上記のルールから継承されます */
+
+            /* * キーボードやブラウザUIの出現に応じて変化する
+             *「動的な表示領域の高さ」にbodyの高さを追従させます。
+             * これがレイアウトが縮むための核となります。
+            */
+            height: 100dvh;
         }
-        /* ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ */
+        .scratchpad-main {
+            /* * flex-grow: 1 で、ヘッダーと入力欄以外の
+             *「残りの全てのスペース」をこの要素が埋めるようにします。
+            */
+            flex-grow: 1;
+            /* 内容がスペースを超えた場合は、この要素内でのみスクロールします。*/
+            overflow-y: auto;
+            padding: 20px;
+        }
+        /* ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ */
 
         .scratchpad-header {
             padding: 15px 20px; display: flex; justify-content: space-between;
             align-items: center; border-bottom: 1px solid var(--dark-border);
-            flex-shrink: 0;
+            flex-shrink: 0; /* ヘッダーは縮まないように固定 */
         }
         .scratchpad-header h1 { font-size: 1.5rem; margin: 0; }
         .scratchpad-buttons .btn {
@@ -50,7 +66,6 @@
         .scratchpad-buttons .btn:hover { background-color: #495057; transform: translateY(-2px); }
         .scratchpad-buttons .btn:disabled { opacity: 0.5; transform: none; cursor: not-allowed; }
         
-        .scratchpad-main { flex-grow: 1; overflow-y: auto; padding: 20px; }
         #scratch-list { list-style: none; padding-left: 0; font-size: 1.6rem; line-height: 1.7; }
         #scratch-list li {
             display: flex; align-items: center; position: relative;
@@ -68,7 +83,8 @@
         
         .input-area {
             padding: 15px 20px; border-top: 1px solid var(--dark-border);
-            display: flex; gap: 15px; flex-shrink: 0;
+            display: flex; gap: 15px;
+            flex-shrink: 0; /* 入力欄も縮まないように固定 */
         }
         .input-area input {
             flex-grow: 1; background-color: transparent; border: none;
@@ -103,13 +119,14 @@
         <ul id="scratch-list"></ul>
     </main>
 
-    <div class="input-area">
+    <div class="input-area" id="input-area">
         <input type="text" id="new-scratch-task" placeholder="とりあえずやることを書く...">
         <button class="btn btn-add" id="add-scratch-btn">+</button>
     </div>
 
     <script>
     document.addEventListener('DOMContentLoaded', () => {
+        // JavaScript部分は変更ありません
         const list = document.getElementById('scratch-list');
         const input = document.getElementById('new-scratch-task');
         const addButton = document.getElementById('add-scratch-btn');
@@ -118,14 +135,11 @@
 
         const STORAGE_KEY = 'scratchpadTasks';
 
-        // URLに ?new=true が含まれているかチェック
         const urlParams = new URLSearchParams(window.location.search);
         const isNewSession = urlParams.has('new');
 
         if (isNewSession) {
-            // 新しいセッションの場合、ローカルストレージをクリア
             localStorage.removeItem(STORAGE_KEY);
-            // リロード時に再度クリアされないよう、URLからパラメータを削除
             window.history.replaceState({}, document.title, window.location.pathname);
         }
 
@@ -178,6 +192,7 @@
             input.focus();
             updateExportButtonState();
             saveTasks();
+            // 新しいタスクが常に見えるように、リストの末尾までスクロール
             mainArea.scrollTop = mainArea.scrollHeight;
         };
 
@@ -205,16 +220,13 @@
                 if (!response.ok) {
                     throw new Error('書き出しに失敗しました。');
                 }
-                // 書き出しが成功したら、ローカルストレージもクリア
                 localStorage.removeItem(STORAGE_KEY);
                 window.location.href = "{{ url_for('todo_list') }}";
             } catch (error) {
                 console.error('Export error:', error);
-                // ここでカスタムアラートを出すのが望ましい
             }
         });
 
-        // ページ読み込み時にタスクを復元
         loadTasks();
     });
     </script>
