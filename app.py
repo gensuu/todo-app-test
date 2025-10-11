@@ -248,14 +248,13 @@ def settings():
 
 @app.route('/sw.js')
 def service_worker():
-    return send_file('sw.js', mimetype='application/javascript')
+    return send_file('static/sw.js', mimetype='application/javascript')
 
 # --- 6. Todoアプリ本体のルート ---
 @app.route('/todo')
 @app.route('/todo/<date_str>')
 @login_required
 def todo_list(date_str=None):
-    calendar.setfirstweekday(calendar.SUNDAY) # カレンダーを日曜始まりに設定
     cleanup_old_tasks(current_user.id)
     if date_str is None:
         target_date = get_jst_today()
@@ -264,6 +263,10 @@ def todo_list(date_str=None):
             target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
         except ValueError:
             return redirect(url_for('todo_list'))
+            
+    # カレンダーを日曜始まりに設定
+    calendar.setfirstweekday(calendar.SUNDAY)
+            
     cal_date_str = request.args.get('cal')
     if cal_date_str:
         try:
@@ -516,9 +519,9 @@ def export_to_sheet():
         worksheet = sh.sheet1
         header = ['主タスクID', '主タスク', 'サブタスク内容', 'マス数', '期限日', '完了日', '遅れた日数']
         if not worksheet.row_values(1):
-            worksheet.append_row(header)
+                worksheet.append_row(header)
         existing_records = worksheet.get_all_values()[1:]
-        existing_keys = set( (rec[1], rec[2], rec[5]) for rec in existing_records )
+        existing_keys = set( (rec[1], rec[2], rec[5]) for rec in existing_records if len(rec) > 5)
         data_to_append = []
         for subtask in completed_tasks:
             if not subtask.completion_date: continue
