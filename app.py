@@ -11,6 +11,7 @@ import pytz
 from io import BytesIO
 import uuid
 import calendar
+import secrets # パスワードリセット機能のために追加
 
 # --- .envファイルを読み込む ---
 from dotenv import load_dotenv
@@ -58,6 +59,7 @@ class User(UserMixin, db.Model):
     summaries = db.relationship('DailySummary', backref='user', lazy=True, cascade="all, delete-orphan")
     task_templates = db.relationship('TaskTemplate', backref='user', lazy=True, cascade="all, delete-orphan")
 
+# ... (他のモデル定義は変更なし) ...
 class MasterTask(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
@@ -93,6 +95,7 @@ class SubtaskTemplate(db.Model):
     content = db.Column(db.String(100), nullable=False)
     grid_count = db.Column(db.Integer, default=1, nullable=False)
 
+
 # --- 3. ログイン管理 ---
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -105,6 +108,7 @@ def load_user(user_id):
 def get_jst_today():
     return datetime.now(pytz.timezone('Asia/Tokyo')).date()
 
+# ... (update_summary, cleanup_old_tasks, init_db, 認証ルートは変更なし) ...
 def update_summary(user_id):
     today = get_jst_today()
     grids_by_date = db.session.query(func.sum(SubTask.grid_count)).join(MasterTask).filter(MasterTask.user_id == user_id, SubTask.is_completed == True).group_by(SubTask.completion_date).all()
@@ -136,7 +140,6 @@ def cleanup_old_tasks(user_id):
         db.session.commit()
         print(f"Deleted {deleted_count} old tasks for user {user_id}.")
 
-# --- 4. 【重要】手動データベース初期化ルート ---
 @app.route('/init-db/<secret_key>')
 def init_db(secret_key):
     if secret_key == os.environ.get("FLASK_SECRET_KEY"):
@@ -155,7 +158,6 @@ def init_db(secret_key):
     else:
         return "認証キーが正しくありません。", 403
 
-# --- 5. 認証・ログイン関連のルート ---
 @app.route("/")
 def index():
     return redirect(url_for("todo_list"))
@@ -250,7 +252,8 @@ def settings():
 def service_worker():
     return send_file('sw.js', mimetype='application/javascript')
 
-# --- 6. Todoアプリ本体のルート ---
+
+# ... (Todoアプリ本体のルートは変更なし) ...
 @app.route('/todo')
 @app.route('/todo/<date_str>')
 @login_required
@@ -433,7 +436,6 @@ def import_excel():
             return redirect(url_for('import_excel'))
     return render_template('import.html')
     
-# --- 8. テンプレート管理とスクラッチパッド ---
 @app.route('/templates', methods=['GET', 'POST'])
 @login_required
 def manage_templates():
@@ -487,7 +489,6 @@ def export_scratchpad():
     flash(f"{len(tasks_to_add)}件のクイックタスクをタスク一覧に追加しました。")
     return jsonify({'success': True})
 
-# --- 9. スプレッドシート連携とデータ整理 ---
 def get_gspread_client():
     sa_info = os.environ.get('GSPREAD_SERVICE_ACCOUNT')
     if not sa_info:
@@ -563,6 +564,31 @@ def delete_user(user_id):
     db.session.delete(user_to_delete); db.session.commit()
     flash(f"ユーザー「{user_to_delete.username}」を削除しました。")
     return redirect(url_for('admin_panel'))
+
+# ▼▼▼ パスワードリセット機能のルートを新しく追加 ▼▼▼
+@app.route('/admin/reset_password/<int:user_id>', methods=['POST'])
+@login_required
+def reset_password(user_id):
+    if not current_user.is_admin:
+        flash("管理者権限がありません。")
+        return redirect(url_for('admin_panel'))
+
+    user_to_reset = db.session.get(User, user_id)
+    if not user_to_reset:
+        flash("指定されたユーザーが見つかりません。")
+        return redirect(url_for('admin_panel'))
+
+    # 新しい一時パスワードを生成 (8文字のランダムな文字列)
+    new_password = secrets.token_hex(8)
+    
+    # 新しいパスワードをハッシュ化してデータベースを更新
+    user_to_reset.password_hash = generate_password_hash(new_password, method='pbkdf2:sha256')
+    db.session.commit()
+
+    # 管理者に新しいパスワードを通知
+    flash(f"ユーザー「{user_to_reset.username}」の新しい一時パスワードは「{new_password}」です。コピーしてユーザーに伝えてください。")
+    return redirect(url_for('admin_panel'))
+# ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
 @app.route('/admin/export_user_data/<int:user_id>', methods=['POST'])
 @login_required

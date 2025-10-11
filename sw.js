@@ -1,8 +1,9 @@
-// キャッシュのバージョンを更新し、新しい戦略を有効にします
-const CACHE_NAME = 'todo-grid-cache-v8';
+// キャッシュのバージョンを更新し、すべての機能を統合した最終版
+const CACHE_NAME = 'todo-grid-cache-v10';
 
 // アプリの骨格となる静的なファイル (App Shell)
 const APP_SHELL_FILES = [
+  '/', // ルートもキャッシュに含める
   '/login',
   '/register',
   '/scratchpad',
@@ -21,7 +22,7 @@ self.addEventListener('install', event => {
     caches.open(CACHE_NAME).then(async cache => {
       console.log('Cache opened. Caching app shell and calendar pages...');
 
-      // ▼▼▼ カレンダーページのURLを動的に生成 ▼▼▼
+      // --- カレンダーページのURLを動的に生成 ---
       const calendarUrls = [];
       const today = new Date();
       const daysToCache = 180; // 約半年
@@ -45,16 +46,13 @@ self.addEventListener('install', event => {
         const day = String(targetDate.getDate()).padStart(2, '0');
         calendarUrls.push(`/todo/${year}-${month}-${day}`);
       }
-      // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+      
+      console.log(`Attempting to cache app shell and ${calendarUrls.length} calendar pages.`);
 
-      const allUrlsToCache = [...APP_SHELL_FILES, ...calendarUrls];
-      console.log(`Attempting to cache ${allUrlsToCache.length} URLs.`);
-
-      // cache.addAllは一つでも失敗すると全体が失敗するため、
-      // 重要なApp Shellだけを先にキャッシュし、カレンダーは個別に追加します。
+      // まず、重要なApp Shellをキャッシュ
       await cache.addAll(APP_SHELL_FILES);
       
-      // カレンダーのURLは一つずつキャッシュを試みる
+      // 次に、カレンダーのURLを一つずつキャッシュ（一つが失敗しても他は継続）
       const calendarPromises = calendarUrls.map(url => {
         return cache.add(url).catch(err => {
           console.warn(`Failed to cache calendar page ${url}:`, err);
@@ -66,7 +64,7 @@ self.addEventListener('install', event => {
   );
 });
 
-// 古いキャッシュを削除する処理 (変更なし)
+// 古いキャッシュを削除する処理
 self.addEventListener('activate', event => {
   const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
@@ -83,16 +81,26 @@ self.addEventListener('activate', event => {
   );
 });
 
-// リクエストに応答する処理 (変更なし)
+// リクエストに応答する処理
 self.addEventListener('fetch', event => {
-  if (event.request.method !== 'GET' || event.request.url.includes('/api/')) {
+  // GETリクエスト以外はネットワークに任せる
+  if (event.request.method !== 'GET') {
     event.respondWith(fetch(event.request));
     return;
   }
 
-  const url = new URL(event.request.url);
+  // PWA (standalone表示) 以外からのナビゲーションリクエストは、常にネットワークを優先
+  if (event.request.mode === 'navigate' && !self.clients.url.startsWith('https://')) {
+    event.respondWith(
+      fetch(event.request).catch(() => {
+        return caches.match(event.request);
+      })
+    );
+    return;
+  }
 
-  if (APP_SHELL_FILES.some(fileUrl => url.pathname === new URL(fileUrl, self.location.origin).pathname)) {
+  // App Shellに含まれるファイルや、画像などの静的リソースは Cache First 戦略
+  if (APP_SHELL_FILES.some(fileUrl => event.request.url.endsWith(fileUrl)) || event.request.destination === 'image' || event.request.destination === 'style' || event.request.destination === 'script') {
     event.respondWith(
       caches.match(event.request).then(cachedResponse => {
         return cachedResponse || fetch(event.request).then(networkResponse => {
@@ -105,21 +113,22 @@ self.addEventListener('fetch', event => {
     );
     return;
   }
-  
+
+  // PWA内の動的なページ (タスク一覧など) は Stale-While-Revalidate 戦略
   event.respondWith(
-    fetch(event.request)
-      .then(networkResponse => {
-        return caches.open(CACHE_NAME).then(cache => {
-          if (networkResponse.status === 200) {
-              cache.put(event.request, networkResponse.clone());
+    caches.open(CACHE_NAME).then(cache => {
+      return cache.match(event.request).then(response => {
+        const fetchPromise = fetch(event.request).then(networkResponse => {
+          if (networkResponse && networkResponse.status === 200) {
+            cache.put(event.request, networkResponse.clone());
           }
           return networkResponse;
+        }).catch(err => {
+            console.warn('Network request failed, probably offline:', err);
         });
-      })
-      .catch(() => {
-        console.log('Network request failed, trying to serve from cache for:', event.request.url);
-        return caches.match(event.request);
-      })
+        return response || fetchPromise;
+      });
+    })
   );
 });
 
