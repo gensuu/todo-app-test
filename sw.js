@@ -1,5 +1,5 @@
-// ▼▼▼ キャッシュのバージョンを v4 に更新 ▼▼▼
-const CACHE_NAME = 'todo-grid-cache-v4';
+// ▼▼▼ キャッシュのバージョンを v5 に更新 ▼▼▼
+const CACHE_NAME = 'todo-grid-cache-v5';
 const urlsToCache = [
   '/',
   '/todo',
