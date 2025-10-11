@@ -54,12 +54,13 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(100), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
+    # ▼▼▼ パスワードリセット強制のためのフラグを追加 ▼▼▼
+    password_reset_required = db.Column(db.Boolean, default=False, nullable=False)
     spreadsheet_url = db.Column(db.String(255), nullable=True)
     master_tasks = db.relationship('MasterTask', backref='user', lazy=True, cascade="all, delete-orphan")
     summaries = db.relationship('DailySummary', backref='user', lazy=True, cascade="all, delete-orphan")
     task_templates = db.relationship('TaskTemplate', backref='user', lazy=True, cascade="all, delete-orphan")
 
-# ... (他のモデル定義は変更なし) ...
 class MasterTask(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
@@ -95,7 +96,6 @@ class SubtaskTemplate(db.Model):
     content = db.Column(db.String(100), nullable=False)
     grid_count = db.Column(db.Integer, default=1, nullable=False)
 
-
 # --- 3. ログイン管理 ---
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -105,11 +105,22 @@ login_manager.login_view = "login"
 def load_user(user_id):
     return db.session.get(User, int(user_id))
 
+# ▼▼▼ パスワードリセットを強制する機能をここに追加 ▼▼▼
+@app.before_request
+def require_password_change():
+    if current_user.is_authenticated and current_user.password_reset_required:
+        # 許可するエンドポイント(設定、ログアウト、静的ファイル)
+        allowed_endpoints = ['settings', 'logout', 'static']
+        if request.endpoint not in allowed_endpoints:
+            flash('セキュリティのため、新しいパスワードを設定してください。', 'warning')
+            return redirect(url_for('settings'))
+# ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
 def get_jst_today():
     return datetime.now(pytz.timezone('Asia/Tokyo')).date()
 
-# ... (update_summary, cleanup_old_tasks, init_db, 認証ルートは変更なし) ...
 def update_summary(user_id):
+    # ... (変更なし)
     today = get_jst_today()
     grids_by_date = db.session.query(func.sum(SubTask.grid_count)).join(MasterTask).filter(MasterTask.user_id == user_id, SubTask.is_completed == True).group_by(SubTask.completion_date).all()
     average_grids = sum(g[0] for g in grids_by_date) / len(grids_by_date) if grids_by_date else 0.0
@@ -132,6 +143,7 @@ def update_summary(user_id):
     db.session.commit()
 
 def cleanup_old_tasks(user_id):
+    # ... (変更なし)
     cleanup_threshold = get_jst_today() - timedelta(days=32)
     old_tasks_query = SubTask.query.join(MasterTask).filter(MasterTask.user_id == user_id, SubTask.is_completed == True, SubTask.completion_date < cleanup_threshold)
     deleted_count = old_tasks_query.count()
@@ -140,8 +152,10 @@ def cleanup_old_tasks(user_id):
         db.session.commit()
         print(f"Deleted {deleted_count} old tasks for user {user_id}.")
 
+# --- 4. 【重要】手動データベース初期化ルート ---
 @app.route('/init-db/<secret_key>')
 def init_db(secret_key):
+    # ... (変更なし)
     if secret_key == os.environ.get("FLASK_SECRET_KEY"):
         with app.app_context():
             db.create_all()
@@ -158,10 +172,12 @@ def init_db(secret_key):
     else:
         return "認証キーが正しくありません。", 403
 
+# --- 5. 認証・ログイン関連のルート ---
 @app.route("/")
 def index():
     return redirect(url_for("todo_list"))
 
+# ... (healthz, register, login, logout は変更なし) ...
 @app.route("/healthz")
 def health_check():
     return "OK", 200
@@ -212,11 +228,13 @@ def logout():
     logout_user()
     return redirect(url_for("login"))
 
+
 @app.route('/settings', methods=['GET', 'POST'])
 @login_required
 def settings():
     if request.method == 'POST':
         if 'update_url' in request.form:
+            # ... (変更なし)
             url = request.form.get('spreadsheet_url')
             current_user.spreadsheet_url = url
             db.session.commit()
@@ -236,24 +254,31 @@ def settings():
                 flash('新しいパスワードを入力してください。')
             else:
                 current_user.password_hash = generate_password_hash(new_password, method='pbkdf2:sha256')
+                # ▼▼▼ パスワード変更後にフラグをリセット ▼▼▼
+                current_user.password_reset_required = False
                 db.session.commit()
                 flash('パスワードが正常に変更されました。')
+                # ▼▼▼ 変更後はタスク一覧へリダイレクト ▼▼▼
+                return redirect(url_for('todo_list'))
         return redirect(url_for('settings'))
+
     days_until_deletion = None
+    # ... (変更なし)
     oldest_completed_task = SubTask.query.join(MasterTask).filter(MasterTask.user_id == current_user.id, SubTask.is_completed == True).order_by(SubTask.completion_date.asc()).first()
     if oldest_completed_task and oldest_completed_task.completion_date:
         today = get_jst_today()
         deletion_date = oldest_completed_task.completion_date + timedelta(days=32)
         days_until_deletion = (deletion_date - today).days
     sa_email = os.environ.get('SERVICE_ACCOUNT_EMAIL', '（管理者が設定してください）')
-    return render_template('settings.html', sa_email=sa_email, days_until_deletion=days_until_deletion)
+    
+    # ▼▼▼ テンプレートにフラグを渡す ▼▼▼
+    return render_template('settings.html', sa_email=sa_email, days_until_deletion=days_until_deletion, force_password_change=current_user.password_reset_required)
 
+# ... (sw.js, todo_list, add_or_edit_task, etc. は変更なし) ...
 @app.route('/sw.js')
 def service_worker():
     return send_file('sw.js', mimetype='application/javascript')
 
-
-# ... (Todoアプリ本体のルートは変更なし) ...
 @app.route('/todo')
 @app.route('/todo/<date_str>')
 @login_required
@@ -267,7 +292,6 @@ def todo_list(date_str=None):
         except ValueError:
             return redirect(url_for('todo_list'))
             
-    # カレンダーを日曜始まりに設定
     calendar.setfirstweekday(calendar.SUNDAY)
             
     cal_date_str = request.args.get('cal')
@@ -544,6 +568,7 @@ def export_to_sheet():
         flash(f"スプレッドシートへの書き込み中にエラーが発生しました: {e}")
     return redirect(url_for('todo_list'))
 
+
 # --- 10. 管理者用ルート ---
 @app.route('/admin')
 @login_required
@@ -583,10 +608,12 @@ def reset_password(user_id):
     
     # 新しいパスワードをハッシュ化してデータベースを更新
     user_to_reset.password_hash = generate_password_hash(new_password, method='pbkdf2:sha256')
+    # ▼▼▼ リセット時にフラグを立てる ▼▼▼
+    user_to_reset.password_reset_required = True
     db.session.commit()
 
     # 管理者に新しいパスワードを通知
-    flash(f"ユーザー「{user_to_reset.username}」の新しい一時パスワードは「{new_password}」です。コピーしてユーザーに伝えてください。")
+    flash(f"ユーザー「{user_to_reset.username}」の新しい一時パスワードは「{new_password}」です。コピーしてユーザーに伝えてください。", 'success')
     return redirect(url_for('admin_panel'))
 # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
