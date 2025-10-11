@@ -2,7 +2,7 @@
 <html lang="ja" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
-    <!-- ▼▼▼ キーボード挙動を制御する重要な一行 ▼▼▼ -->
+    <!-- ▼▼▼ キーボード挙動を制御する最も重要な一行 ▼▼▼ -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
     <title>今からTodo</title>
     
@@ -21,42 +21,48 @@
             --primary-color: #6a5acd;
         }
         
-        /* ▼▼▼ Flexboxによる新しいレイアウトの核となる部分 ▼▼▼ */
-        html {
+        /* ▼▼▼ 新しいレイアウトの核となる部分 ▼▼▼ */
+        html, body {
+            /* 高さを固定せず、コンテンツの量に任せる */
             height: 100%;
         }
         body {
             font-family: 'Kalam', cursive; 
             font-weight: 400;
-            background-color: var(--dark-bg); 
+            background-color: var--dark-bg); 
             color: var(--text-color);
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-
-            /* Flexboxレイアウトを適用し、画面全体をコンテナとする */
+            
+            /* Flexboxで3つの主要エリアを配置 */
             display: flex;
             flex-direction: column;
-            height: 100vh; /* vh単位が meta タグによって正しく機能する */
         }
 
         .scratchpad-header {
-            flex-shrink: 0; /* この要素は縮まない */
+            /* ヘッダーは縮まない */
+            flex-shrink: 0; 
             padding: 15px 20px; 
             display: flex; 
             justify-content: space-between;
             align-items: center; 
             border-bottom: 1px solid var(--dark-border);
+            /* ヘッダーを最上部に固定する (スクロールしても追従) */
+            position: sticky;
+            top: 0;
+            background-color: var(--dark-bg);
+            z-index: 1020;
         }
 
         .scratchpad-main {
-            flex-grow: 1; /* 残りの利用可能なスペースをすべて埋める */
-            overflow-y: auto; /* 内容が溢れた場合は、この要素内でのみスクロール */
+            /* 残りのスペースをすべて埋める */
+            flex-grow: 1; 
+            /* 内容が溢れたら、この要素内でのみスクロール */
+            overflow-y: auto; 
             padding: 20px;
         }
 
         .input-area {
-            flex-shrink: 0; /* この要素は縮まない */
+            /* 入力欄は縮まない */
+            flex-shrink: 0; 
             padding: 15px 20px; 
             border-top: 1px solid var(--dark-border);
             display: flex; 
@@ -66,6 +72,7 @@
         }
         /* ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ */
 
+        /* --- その他のスタイル (微調整) --- */
         .scratchpad-header h1 { font-size: 1.5rem; margin: 0; }
         .scratchpad-buttons .btn {
             width: 45px; height: 45px; border-radius: 50%; background-color: #343a40;
@@ -87,16 +94,10 @@
         }
         
         .task-bullet {
-            margin-right: 15px;
-            color: #6c757d;
-            transition: color 0.2s;
-            cursor: pointer;
-            user-select: none;
+            margin-right: 15px; color: #6c757d;
+            transition: color 0.2s; cursor: pointer; user-select: none;
         }
-        .task-bullet:hover {
-            color: #adb5bd;
-        }
-
+        .task-bullet:hover { color: #adb5bd; }
         #scratch-list li.completed .task-text { color: #6c757d; position: relative; }
         #scratch-list li.completed .task-text::after {
             content: ''; position: absolute; left: -2%; top: 55%; width: 104%; height: 2px;
@@ -255,6 +256,9 @@
                 window.location.href = "{{ url_for('todo_list') }}";
             } catch (error) { console.error('Export error:', error); }
         });
+
+        // 不安定な動作の原因となっていた複雑なJavaScriptはすべて削除しました。
+        // シンプルなCSSとブラウザの標準機能に任せることで、安定した動作を実現します。
     });
     </script>
 </body>
