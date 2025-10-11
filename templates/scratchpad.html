@@ -2,7 +2,8 @@
 <html lang="ja" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- ▼▼▼ キーボード挙動を制御する重要な一行 ▼▼▼ -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
     <title>今からTodo</title>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -18,65 +19,52 @@
             --dark-border: #444;
             --text-color: #dee2e6;
             --primary-color: #6a5acd;
-            --header-height: 70px;
-            --footer-height: 80px;
         }
         
-        /* ▼▼▼ 新しいレイアウトアプローチ ▼▼▼ */
-        html, body {
+        /* ▼▼▼ Flexboxによる新しいレイアウトの核となる部分 ▼▼▼ */
+        html {
             height: 100%;
-            overflow: hidden;
-            margin: 0;
-            padding: 0;
         }
         body {
             font-family: 'Kalam', cursive; 
             font-weight: 400;
             background-color: var(--dark-bg); 
             color: var(--text-color);
-            position: relative;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+
+            /* Flexboxレイアウトを適用し、画面全体をコンテナとする */
+            display: flex;
+            flex-direction: column;
+            height: 100vh; /* vh単位が meta タグによって正しく機能する */
         }
 
         .scratchpad-header {
-            position: fixed; /* ヘッダーを画面上部に固定 */
-            top: 0;
-            left: 0;
-            right: 0;
-            height: var(--header-height);
-            padding: 0 20px; 
+            flex-shrink: 0; /* この要素は縮まない */
+            padding: 15px 20px; 
             display: flex; 
             justify-content: space-between;
             align-items: center; 
             border-bottom: 1px solid var(--dark-border);
-            background-color: var(--dark-bg);
-            z-index: 10;
         }
 
         .scratchpad-main {
-            /* ヘッダーとフッターの分だけ上下に余白を作り、コンテンツが隠れないようにする */
-            padding: var(--header-height) 20px var(--footer-height);
-            /* この要素だけがスクロールするように設定 */
-            height: 100%;
-            overflow-y: auto;
-            box-sizing: border-box; /* paddingを含めて高さを計算 */
+            flex-grow: 1; /* 残りの利用可能なスペースをすべて埋める */
+            overflow-y: auto; /* 内容が溢れた場合は、この要素内でのみスクロール */
+            padding: 20px;
         }
 
         .input-area {
-            position: fixed; /* 入力欄を画面下部に固定（JSで位置を制御） */
-            bottom: 0;
-            left: 0;
-            right: 0;
-            height: var(--footer-height);
-            padding: 0 20px; 
+            flex-shrink: 0; /* この要素は縮まない */
+            padding: 15px 20px; 
             border-top: 1px solid var(--dark-border);
             display: flex; 
             gap: 15px;
             align-items: center;
             background-color: var(--dark-bg);
-            z-index: 10;
-            transition: bottom 0.2s ease-out; /* 位置が変わる際にアニメーション */
         }
-        /* ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ */
+        /* ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ */
 
         .scratchpad-header h1 { font-size: 1.5rem; margin: 0; }
         .scratchpad-buttons .btn {
@@ -92,14 +80,23 @@
         
         #scratch-list { list-style: none; padding-left: 0; font-size: 1.6rem; line-height: 1.7; margin: 0;}
         #scratch-list li {
-            display: flex; align-items: center; position: relative;
+            display: flex; 
+            align-items: center; 
+            position: relative;
             padding: 8px 0;
         }
+        
         .task-bullet {
-            margin-right: 15px; color: #6c757d;
-            transition: color 0.2s; cursor: pointer; user-select: none;
+            margin-right: 15px;
+            color: #6c757d;
+            transition: color 0.2s;
+            cursor: pointer;
+            user-select: none;
         }
-        .task-bullet:hover { color: #adb5bd; }
+        .task-bullet:hover {
+            color: #adb5bd;
+        }
+
         #scratch-list li.completed .task-text { color: #6c757d; position: relative; }
         #scratch-list li.completed .task-text::after {
             content: ''; position: absolute; left: -2%; top: 55%; width: 104%; height: 2px;
@@ -124,6 +121,7 @@
         }
 
         @media (max-width: 576px) {
+            .scratchpad-main { padding-left: 15px; padding-right: 15px; }
             #scratch-list { font-size: 1.3rem; }
             .input-area input { font-size: 1.2rem; }
             .scratchpad-header h1 { font-size: 1.2rem; }
@@ -156,10 +154,10 @@
         const addButton = document.getElementById('add-scratch-btn');
         const exportButton = document.getElementById('export-btn');
         const mainArea = document.getElementById('scratchpad-main-area');
-        const inputArea = document.getElementById('input-area');
         const STORAGE_KEY = 'scratchpadTasks';
 
         // --- 全ての関数を先に定義 ---
+
         const saveTasks = () => {
             const tasks = [];
             list.querySelectorAll('li').forEach(li => {
@@ -179,21 +177,25 @@
         const createTaskElement = (taskText, isCompleted) => {
             const li = document.createElement('li');
             if (isCompleted) { li.classList.add('completed'); }
+
             const bulletSpan = document.createElement('span');
             bulletSpan.className = 'task-bullet';
             bulletSpan.textContent = '•';
+            
             const textSpan = document.createElement('span');
             textSpan.className = 'task-text';
             textSpan.textContent = taskText;
+
             li.appendChild(bulletSpan);
             li.appendChild(textSpan);
+
             bulletSpan.addEventListener('click', () => {
                 li.classList.toggle('completed');
                 updateExportButtonState();
                 saveTasks();
             });
+
             list.appendChild(li);
-            return li;
         };
         
         const loadTasks = () => {
@@ -205,30 +207,42 @@
         const addTask = () => {
             const taskText = input.value.trim();
             if (taskText === '') return;
+            
             createTaskElement(taskText, false);
+
             input.value = '';
             input.focus();
             updateExportButtonState();
             saveTasks();
-            
-            // ▼▼▼ リストの一番下までスムーズにスクロール ▼▼▼
+
+            // リストの一番下までスムーズにスクロール
             mainArea.scrollTo({ top: mainArea.scrollHeight, behavior: 'smooth' });
         };
-        
+
         // --- 初期化処理とイベントリスナー ---
+
+        // スマートリセット機能
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.has('new')) {
             localStorage.removeItem(STORAGE_KEY);
             window.history.replaceState({}, document.title, window.location.pathname);
         }
+
+        // ページ読み込み時にタスクを復元
         loadTasks();
+        
+        // タスク追加イベント
         addButton.addEventListener('click', addTask);
         input.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') { e.preventDefault(); addTask(); }
         });
+
+        // 書き出しイベント
         exportButton.addEventListener('click', async () => {
             const uncompletedTasks = [];
-            list.querySelectorAll('li:not(.completed) .task-text').forEach(span => uncompletedTasks.push(span.textContent));
+            list.querySelectorAll('li:not(.completed) .task-text').forEach(span => {
+                uncompletedTasks.push(span.textContent);
+            });
             if (uncompletedTasks.length === 0) { return; }
             try {
                 const response = await fetch("{{ url_for('export_scratchpad') }}", {
@@ -241,18 +255,6 @@
                 window.location.href = "{{ url_for('todo_list') }}";
             } catch (error) { console.error('Export error:', error); }
         });
-
-        // --- ▼▼▼ 新しいキーボード追従機能 ▼▼▼ ---
-        if (window.visualViewport) {
-            window.visualViewport.addEventListener('resize', () => {
-                // キーボードの高さを計算 (レイアウト全体の高さ - 見えている領域の高さ)
-                const keyboardHeight = document.documentElement.clientHeight - window.visualViewport.height;
-                
-                // 計算されたキーボードの高さ分だけ、入力欄を上に押し上げる
-                // 0未満にならないようにMath.maxを使用
-                inputArea.style.bottom = Math.max(0, keyboardHeight) + 'px';
-            });
-        }
     });
     </script>
 </body>
