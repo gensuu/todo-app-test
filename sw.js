@@ -1,5 +1,7 @@
-// ▼▼▼ キャッシュのバージョンを v5 に更新 ▼▼▼
-const CACHE_NAME = 'todo-grid-cache-v5';
+// キャッシュのバージョンを更新し、新しい戦略を有効にします
+const CACHE_NAME = 'todo-grid-cache-v6'; 
+
+// キャッシュするファイルのリスト（HTMLも再度含めます）
 const urlsToCache = [
   '/',
   '/todo',
@@ -11,16 +13,24 @@ const urlsToCache = [
   'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js'
 ];
 
+// Service Workerのインストール処理
 self.addEventListener('install', event => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
       console.log('Opened cache and caching basic assets');
-      return cache.addAll(urlsToCache);
+      // 一つのファイルのキャッシュに失敗しても、全体が失敗しないようにPromiseでラップ
+      const promises = urlsToCache.map(url => {
+        return cache.add(url).catch(err => {
+          console.warn(`Failed to cache ${url}:`, err);
+        });
+      });
+      return Promise.all(promises);
     })
   );
 });
 
+// 古いキャッシュを削除する処理
 self.addEventListener('activate', event => {
   const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
@@ -37,26 +47,27 @@ self.addEventListener('activate', event => {
   );
 });
 
+// リクエストに応答する処理
 self.addEventListener('fetch', event => {
-  // http/https以外のGETリクエストは無視
-  if (event.request.method !== 'GET' || !event.request.url.startsWith('http')) {
+  // GETリクエスト以外は無視
+  if (event.request.method !== 'GET') {
     return;
   }
 
   const url = new URL(event.request.url);
 
-  // APIや認証関連のルートは常にネットワークから取得 (キャッシュしない)
-  if (event.request.url.includes('/api/') || url.pathname.startsWith('/login') || url.pathname.startsWith('/register') || url.pathname.startsWith('/logout')) {
+  // APIや認証関連のルートは常にネットワークから取得 (変更なし)
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/login') || url.pathname.startsWith('/register') || url.pathname.startsWith('/logout')) {
     event.respondWith(fetch(event.request));
     return;
   }
 
-  // 画像やCSSなどの静的アセットは「Cache First」戦略
+  // 画像やCSSなどの静的アセットは「Cache First」戦略 (変更なし)
   if (url.pathname.startsWith('/static/') || url.origin.includes('cdn.jsdelivr.net')) {
     event.respondWith(
-      caches.open(CACHE_NAME).then(cache => {
-        return cache.match(event.request).then(response => {
-          return response || fetch(event.request).then(networkResponse => {
+      caches.match(event.request).then(response => {
+        return response || fetch(event.request).then(networkResponse => {
+          return caches.open(CACHE_NAME).then(cache => {
             cache.put(event.request, networkResponse.clone());
             return networkResponse;
           });
@@ -66,25 +77,25 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // ★★★ ここからが修正箇所 ★★★
-  // HTMLページは「Network First, falling back to Cache」戦略
+  // ▼▼▼ HTMLページに対する新しい戦略「Stale-While-Revalidate」 ▼▼▼
   event.respondWith(
-    // まずネットワークからの取得を試みる
-    fetch(event.request)
-      .then(networkResponse => {
-        // 正常なレスポンス(200 OK)の場合のみキャッシュに保存
-        if (networkResponse && networkResponse.status === 200) {
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then(cache => {
-            cache.put(event.request, responseToCache);
-          });
-        }
-        return networkResponse;
-      })
-      .catch(error => {
-        // ネットワークに失敗した場合、キャッシュから取得を試みる
-        console.log('Network request failed, trying to serve from cache.', error);
-        return caches.match(event.request);
-      })
+    caches.open(CACHE_NAME).then(cache => {
+      return cache.match(event.request).then(response => {
+        // まずキャッシュを返しつつ、裏側でネットワークに更新を確認しにいく
+        const fetchPromise = fetch(event.request).then(networkResponse => {
+          // 正常なレスポンスの場合のみキャッシュを更新
+          if (networkResponse && networkResponse.status === 200) {
+            cache.put(event.request, networkResponse.clone());
+          }
+          return networkResponse;
+        }).catch(err => {
+            console.warn('Network request failed, probably offline:', err);
+            // オフラインの場合はキャッシュが返されているので、ここでは何もしない
+        });
+
+        // キャッシュがあればそれを即座に返す。なければネットワークの結果を待つ。
+        return response || fetchPromise;
+      });
+    })
   );
 });
