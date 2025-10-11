@@ -123,7 +123,6 @@
     <header class="scratchpad-header">
         <h1><i class="bi bi-pencil-square"></i> 今からTodo</h1>
         <div class="scratchpad-buttons d-flex gap-2">
-            <!-- ▼▼▼ 復元ボタンを追加 ▼▼▼ -->
             <button class="btn" id="restore-btn" title="前回のリストを復元" style="display: none;"><i class="bi bi-arrow-counterclockwise"></i></button>
             <a href="{{ url_for('todo_list') }}" class="btn" title="戻る"><i class="bi bi-arrow-left"></i></a>
             <button class="btn" id="export-btn" title="タスク一覧へ書き出し" disabled><i class="bi bi-send"></i></button>
@@ -146,77 +145,14 @@
         const input = document.getElementById('new-scratch-task');
         const addButton = document.getElementById('add-scratch-btn');
         const exportButton = document.getElementById('export-btn');
-        const restoreButton = document.getElementById('restore-btn'); // 復元ボタンを取得
+        const restoreButton = document.getElementById('restore-btn');
         const mainArea = document.getElementById('scratchpad-main-area');
         const STORAGE_KEY = 'scratchpadTasks';
-        const PREVIOUS_STORAGE_KEY = 'scratchpadTasks_previous'; // バックアップ用のキー
+        const PREVIOUS_STORAGE_KEY = 'scratchpadTasks_previous';
 
-        // --- 全ての関数を先に定義 ---
-        const saveTasks = () => { /* ... */ };
-        const updateExportButtonState = () => { /* ... */ };
-        const createTaskElement = (taskText, isCompleted) => { /* ... */ };
-        const loadTasks = () => { /* ... */ };
-        const addTask = () => { /* ... */ };
+        // --- 関数の定義 ---
 
-        // --- 初期化処理とイベントリスナー ---
-
-        // スマートリセット機能 & 前回リストのバックアップ
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.has('new')) {
-            const currentTasks = localStorage.getItem(STORAGE_KEY);
-            // 現在のタスクがあれば、それを「前回」としてバックアップ
-            if (currentTasks && JSON.parse(currentTasks).length > 0) {
-                localStorage.setItem(PREVIOUS_STORAGE_KEY, currentTasks);
-            }
-            // 現在のリストをリセット
-            localStorage.removeItem(STORAGE_KEY);
-            window.history.replaceState({}, document.title, window.location.pathname);
-        }
-
-        // ▼▼▼ 復元ボタンの表示制御 ▼▼▼
-        if (localStorage.getItem(PREVIOUS_STORAGE_KEY)) {
-            restoreButton.style.display = 'flex'; // バックアップがあればボタンを表示
-        }
-
-        // ページ読み込み時にタスクを復元 (リセット後は空のはず)
-        loadTasks();
-        
-        // タスク追加イベント
-        addButton.addEventListener('click', addTask);
-        input.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') { e.preventDefault(); addTask(); }
-        });
-
-        // 書き出しイベント
-        exportButton.addEventListener('click', async () => { /* ... */ });
-        
-        // ▼▼▼ 復元ボタンのクリックイベント ▼▼▼
-        restoreButton.addEventListener('click', () => {
-            const previousTasksJSON = localStorage.getItem(PREVIOUS_STORAGE_KEY);
-            if (previousTasksJSON) {
-                const previousTasks = JSON.parse(previousTasksJSON);
-                
-                // 復元するタスクを現在のリストの末尾に追加
-                previousTasks.forEach(task => {
-                    createTaskElement(task.text, task.completed);
-                });
-
-                // 復元が完了したのでバックアップは削除
-                localStorage.removeItem(PREVIOUS_STORAGE_KEY);
-                // 復元ボタンを非表示に
-                restoreButton.style.display = 'none';
-
-                // 現在のリスト全体を保存
-                saveTasks();
-                // ボタンの状態を更新
-                updateExportButtonState();
-                // リストの末尾にスクロール
-                mainArea.scrollTo({ top: mainArea.scrollHeight, behavior: 'smooth' });
-            }
-        });
-
-        // --- 関数の詳細な実装 (変更なし) ---
-        function saveTasks() {
+        const saveTasks = () => {
             const tasks = [];
             list.querySelectorAll('li').forEach(li => {
                 tasks.push({
@@ -225,14 +161,14 @@
                 });
             });
             localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
-        }
+        };
 
-        function updateExportButtonState() {
+        const updateExportButtonState = () => {
             const uncompletedTasks = list.querySelectorAll('li:not(.completed)').length;
             exportButton.disabled = uncompletedTasks === 0;
-        }
+        };
 
-        function createTaskElement(taskText, isCompleted) {
+        const createTaskElement = (taskText, isCompleted) => {
             const li = document.createElement('li');
             if (isCompleted) { li.classList.add('completed'); }
 
@@ -254,15 +190,16 @@
             });
 
             list.appendChild(li);
-        }
+        };
         
-        function loadTasks() {
+        const loadTasks = () => {
             const savedTasks = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            list.innerHTML = ''; // リストをクリアしてから読み込む
             savedTasks.forEach(task => createTaskElement(task.text, task.completed));
             updateExportButtonState();
-        }
+        };
 
-        function addTask() {
+        const addTask = () => {
             const taskText = input.value.trim();
             if (taskText === '') return;
             
@@ -274,9 +211,9 @@
             saveTasks();
 
             mainArea.scrollTo({ top: mainArea.scrollHeight, behavior: 'smooth' });
-        }
+        };
 
-        async function exportTasks() {
+        const exportTasks = async () => {
             const uncompletedTasks = [];
             list.querySelectorAll('li:not(.completed) .task-text').forEach(span => {
                 uncompletedTasks.push(span.textContent);
@@ -290,12 +227,51 @@
                 });
                 if (!response.ok) { throw new Error('書き出しに失敗しました。'); }
                 localStorage.removeItem(STORAGE_KEY);
-                // バックアップも不要になるので削除
                 localStorage.removeItem(PREVIOUS_STORAGE_KEY); 
                 window.location.href = "{{ url_for('todo_list') }}";
             } catch (error) { console.error('Export error:', error); }
+        };
+
+        const restoreTasks = () => {
+            const previousTasksJSON = localStorage.getItem(PREVIOUS_STORAGE_KEY);
+            if (previousTasksJSON) {
+                const previousTasks = JSON.parse(previousTasksJSON);
+                previousTasks.forEach(task => {
+                    createTaskElement(task.text, task.completed);
+                });
+                localStorage.removeItem(PREVIOUS_STORAGE_KEY);
+                restoreButton.style.display = 'none';
+                saveTasks();
+                updateExportButtonState();
+                mainArea.scrollTo({ top: mainArea.scrollHeight, behavior: 'smooth' });
+            }
+        };
+
+
+        // --- 初期化処理とイベントリスナー ---
+
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('new')) {
+            const currentTasks = localStorage.getItem(STORAGE_KEY);
+            if (currentTasks && JSON.parse(currentTasks).length > 0) {
+                localStorage.setItem(PREVIOUS_STORAGE_KEY, currentTasks);
+            }
+            localStorage.removeItem(STORAGE_KEY);
+            window.history.replaceState({}, document.title, window.location.pathname);
         }
+
+        if (localStorage.getItem(PREVIOUS_STORAGE_KEY)) {
+            restoreButton.style.display = 'flex';
+        }
+
+        loadTasks();
+        
+        addButton.addEventListener('click', addTask);
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); addTask(); }
+        });
         exportButton.addEventListener('click', exportTasks);
+        restoreButton.addEventListener('click', restoreTasks);
     });
     </script>
 </body>
