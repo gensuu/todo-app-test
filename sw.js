@@ -1,13 +1,18 @@
 // キャッシュのバージョンを更新し、新しい戦略を有効にします
-const CACHE_NAME = 'todo-grid-cache-v6'; 
+const CACHE_NAME = 'todo-grid-cache-v7';
 
-// キャッシュするファイルのリスト（HTMLも再度含めます）
-const urlsToCache = [
-  '/',
-  '/todo',
+// アプリの骨格となる静的なファイル (App Shell)
+// これらはインストール時に一度だけキャッシュされます
+const APP_SHELL_FILES = [
+  // PWAの動作に不可欠な静的ページ
+  '/login',
+  '/register',
+  '/scratchpad',
+  // CSS, JS, 画像など
   '/static/style.css',
   '/static/images/icon-192x192.png',
   '/static/images/icon-512x512.png',
+  // 外部ライブラリ
   'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css',
   'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css',
   'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js'
@@ -18,14 +23,8 @@ self.addEventListener('install', event => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      console.log('Opened cache and caching basic assets');
-      // 一つのファイルのキャッシュに失敗しても、全体が失敗しないようにPromiseでラップ
-      const promises = urlsToCache.map(url => {
-        return cache.add(url).catch(err => {
-          console.warn(`Failed to cache ${url}:`, err);
-        });
-      });
-      return Promise.all(promises);
+      console.log('Cache opened. Caching app shell...');
+      return cache.addAll(APP_SHELL_FILES);
     })
   );
 });
@@ -49,24 +48,21 @@ self.addEventListener('activate', event => {
 
 // リクエストに応答する処理
 self.addEventListener('fetch', event => {
-  // GETリクエスト以外は無視
-  if (event.request.method !== 'GET') {
+  // POSTリクエストやAPIへのリクエストは常にネットワークへ
+  if (event.request.method !== 'GET' || event.request.url.includes('/api/')) {
+    event.respondWith(fetch(event.request));
     return;
   }
 
   const url = new URL(event.request.url);
 
-  // APIや認証関連のルートは常にネットワークから取得 (変更なし)
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/login') || url.pathname.startsWith('/register') || url.pathname.startsWith('/logout')) {
-    event.respondWith(fetch(event.request));
-    return;
-  }
-
-  // 画像やCSSなどの静的アセットは「Cache First」戦略 (変更なし)
-  if (url.pathname.startsWith('/static/') || url.origin.includes('cdn.jsdelivr.net')) {
+  // App Shellに含まれるファイルへのリクエストは、まずキャッシュから返す (Cache First)
+  // これにより、ログインページや今からTodoなどがオフラインでも瞬時に表示されます
+  if (APP_SHELL_FILES.some(fileUrl => url.pathname === new URL(fileUrl, self.location.origin).pathname)) {
     event.respondWith(
-      caches.match(event.request).then(response => {
-        return response || fetch(event.request).then(networkResponse => {
+      caches.match(event.request).then(cachedResponse => {
+        return cachedResponse || fetch(event.request).then(networkResponse => {
+          // キャッシュになかった場合はネットワークから取得し、キャッシュに保存する
           return caches.open(CACHE_NAME).then(cache => {
             cache.put(event.request, networkResponse.clone());
             return networkResponse;
@@ -76,26 +72,27 @@ self.addEventListener('fetch', event => {
     );
     return;
   }
-
-  // ▼▼▼ HTMLページに対する新しい戦略「Stale-While-Revalidate」 ▼▼▼
+  
+  // ▼▼▼ タスク一覧など、動的なHTMLページに対する戦略 ▼▼▼
+  // 「Network Falling Back to Cache」
   event.respondWith(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.match(event.request).then(response => {
-        // まずキャッシュを返しつつ、裏側でネットワークに更新を確認しにいく
-        const fetchPromise = fetch(event.request).then(networkResponse => {
-          // 正常なレスポンスの場合のみキャッシュを更新
-          if (networkResponse && networkResponse.status === 200) {
-            cache.put(event.request, networkResponse.clone());
+    // まずネットワークからの取得を試みる
+    fetch(event.request)
+      .then(networkResponse => {
+        // 取得に成功したら、キャッシュを更新してからレスポンスを返す
+        return caches.open(CACHE_NAME).then(cache => {
+          // 正常なレスポンスのみキャッシュする
+          if (networkResponse.status === 200) {
+              cache.put(event.request, networkResponse.clone());
           }
           return networkResponse;
-        }).catch(err => {
-            console.warn('Network request failed, probably offline:', err);
-            // オフラインの場合はキャッシュが返されているので、ここでは何もしない
         });
-
-        // キャッシュがあればそれを即座に返す。なければネットワークの結果を待つ。
-        return response || fetchPromise;
-      });
-    })
+      })
+      .catch(() => {
+        // ネットワークに失敗した場合（オフライン）、キャッシュから応答を試みる
+        console.log('Network request failed, trying to serve from cache for:', event.request.url);
+        return caches.match(event.request);
+      })
   );
 });
+
