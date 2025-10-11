@@ -248,7 +248,7 @@ def settings():
 
 @app.route('/sw.js')
 def service_worker():
-    return send_file('static/sw.js', mimetype='application/javascript')
+    return send_file('sw.js', mimetype='application/javascript')
 
 # --- 6. Todoアプリ本体のルート ---
 @app.route('/todo')
