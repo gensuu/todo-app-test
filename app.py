@@ -11,7 +11,7 @@ import pytz
 from io import BytesIO
 import uuid
 import calendar
-import secrets # パスワードリセット機能のために追加
+import secrets
 
 # --- .envファイルを読み込む ---
 from dotenv import load_dotenv
@@ -40,7 +40,16 @@ if 'sqlite' in db_url:
 
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
+
+# ▼▼▼ データベース接続の安定性を向上させるための設定を追加 ▼▼▼
+# これにより、サーバーレス環境でのアイドルタイムアウトによる接続エラーを防ぎます。
+engine_options = {
+    "pool_pre_ping": True, # 接続を使用する前に、接続が有効かテストする
+    "pool_recycle": 300,   # 300秒(5分)ごとに接続をリサイクルする
+}
+
+db = SQLAlchemy(app, engine_options=engine_options)
+# ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
 class DateAsString(TypeDecorator):
     impl = String
@@ -54,7 +63,6 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(100), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
-    # ▼▼▼ パスワードリセット強制のためのフラグを追加 ▼▼▼
     password_reset_required = db.Column(db.Boolean, default=False, nullable=False)
     spreadsheet_url = db.Column(db.String(255), nullable=True)
     master_tasks = db.relationship('MasterTask', backref='user', lazy=True, cascade="all, delete-orphan")
@@ -105,22 +113,18 @@ login_manager.login_view = "login"
 def load_user(user_id):
     return db.session.get(User, int(user_id))
 
-# ▼▼▼ パスワードリセットを強制する機能をここに追加 ▼▼▼
 @app.before_request
 def require_password_change():
     if current_user.is_authenticated and current_user.password_reset_required:
-        # 許可するエンドポイント(設定、ログアウト、静的ファイル)
         allowed_endpoints = ['settings', 'logout', 'static']
         if request.endpoint not in allowed_endpoints:
             flash('セキュリティのため、新しいパスワードを設定してください。', 'warning')
             return redirect(url_for('settings'))
-# ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
 def get_jst_today():
     return datetime.now(pytz.timezone('Asia/Tokyo')).date()
 
 def update_summary(user_id):
-    # ... (変更なし)
     today = get_jst_today()
     grids_by_date = db.session.query(func.sum(SubTask.grid_count)).join(MasterTask).filter(MasterTask.user_id == user_id, SubTask.is_completed == True).group_by(SubTask.completion_date).all()
     average_grids = sum(g[0] for g in grids_by_date) / len(grids_by_date) if grids_by_date else 0.0
@@ -143,7 +147,6 @@ def update_summary(user_id):
     db.session.commit()
 
 def cleanup_old_tasks(user_id):
-    # ... (変更なし)
     cleanup_threshold = get_jst_today() - timedelta(days=32)
     old_tasks_query = SubTask.query.join(MasterTask).filter(MasterTask.user_id == user_id, SubTask.is_completed == True, SubTask.completion_date < cleanup_threshold)
     deleted_count = old_tasks_query.count()
@@ -155,7 +158,6 @@ def cleanup_old_tasks(user_id):
 # --- 4. 【重要】手動データベース初期化ルート ---
 @app.route('/init-db/<secret_key>')
 def init_db(secret_key):
-    # ... (変更なし)
     if secret_key == os.environ.get("FLASK_SECRET_KEY"):
         with app.app_context():
             db.create_all()
@@ -177,7 +179,6 @@ def init_db(secret_key):
 def index():
     return redirect(url_for("todo_list"))
 
-# ... (healthz, register, login, logout は変更なし) ...
 @app.route("/healthz")
 def health_check():
     return "OK", 200
@@ -228,13 +229,11 @@ def logout():
     logout_user()
     return redirect(url_for("login"))
 
-
 @app.route('/settings', methods=['GET', 'POST'])
 @login_required
 def settings():
     if request.method == 'POST':
         if 'update_url' in request.form:
-            # ... (変更なし)
             url = request.form.get('spreadsheet_url')
             current_user.spreadsheet_url = url
             db.session.commit()
@@ -254,31 +253,25 @@ def settings():
                 flash('新しいパスワードを入力してください。')
             else:
                 current_user.password_hash = generate_password_hash(new_password, method='pbkdf2:sha256')
-                # ▼▼▼ パスワード変更後にフラグをリセット ▼▼▼
                 current_user.password_reset_required = False
                 db.session.commit()
                 flash('パスワードが正常に変更されました。')
-                # ▼▼▼ 変更後はタスク一覧へリダイレクト ▼▼▼
                 return redirect(url_for('todo_list'))
         return redirect(url_for('settings'))
-
     days_until_deletion = None
-    # ... (変更なし)
     oldest_completed_task = SubTask.query.join(MasterTask).filter(MasterTask.user_id == current_user.id, SubTask.is_completed == True).order_by(SubTask.completion_date.asc()).first()
     if oldest_completed_task and oldest_completed_task.completion_date:
         today = get_jst_today()
         deletion_date = oldest_completed_task.completion_date + timedelta(days=32)
         days_until_deletion = (deletion_date - today).days
     sa_email = os.environ.get('SERVICE_ACCOUNT_EMAIL', '（管理者が設定してください）')
-    
-    # ▼▼▼ テンプレートにフラグを渡す ▼▼▼
     return render_template('settings.html', sa_email=sa_email, days_until_deletion=days_until_deletion, force_password_change=current_user.password_reset_required)
 
-# ... (sw.js, todo_list, add_or_edit_task, etc. は変更なし) ...
 @app.route('/sw.js')
 def service_worker():
     return send_file('sw.js', mimetype='application/javascript')
 
+# --- 6. Todoアプリ本体のルート ---
 @app.route('/todo')
 @app.route('/todo/<date_str>')
 @login_required
