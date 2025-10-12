@@ -116,7 +116,7 @@ def load_user(user_id):
 @app.before_request
 def require_password_change():
     if current_user.is_authenticated and current_user.password_reset_required:
-        allowed_endpoints = ['settings', 'logout', 'static']
+        allowed_endpoints = ['settings', 'logout', 'static', 'api_sync'] # syncエンドポイントを許可
         if request.endpoint not in allowed_endpoints:
             flash('セキュリティのため、新しいパスワードを設定してください。', 'warning')
             return redirect(url_for('settings'))
@@ -270,6 +270,10 @@ def settings():
 @app.route('/sw.js')
 def service_worker():
     return send_file('sw.js', mimetype='application/javascript')
+    
+@app.route('/static/offline.js')
+def offline_js():
+    return send_file('static/offline.js', mimetype='application/javascript')
 
 # --- 6. Todoアプリ本体のルート ---
 @app.route('/todo')
@@ -409,6 +413,63 @@ def complete_subtask_api(subtask_id):
     db.session.commit()
     update_summary(current_user.id)
     return jsonify({'success': True, 'is_completed': subtask.is_completed})
+
+# ▼▼▼ オフライン同期用のAPIエンドポイント ▼▼▼
+@app.route('/api/sync', methods=['POST'])
+@login_required
+def api_sync():
+    data = request.json
+    today = get_jst_today()
+    
+    # --- 新しいタスクの同期 ---
+    new_tasks_data = data.get('new_tasks', [])
+    for task_data in new_tasks_data:
+        try:
+            due_date = datetime.strptime(task_data['due_date'], '%Y-%m-%d').date()
+            master_task = MasterTask(
+                title=task_data['title'],
+                due_date=due_date,
+                is_urgent=task_data['is_urgent'],
+                user_id=current_user.id
+            )
+            db.session.add(master_task)
+            db.session.flush() # master_task.id を確定させる
+            for subtask_data in task_data['subtasks']:
+                subtask = SubTask(
+                    master_id=master_task.id,
+                    content=subtask_data['content'],
+                    grid_count=subtask_data['grid_count']
+                )
+                db.session.add(subtask)
+        except Exception as e:
+            print(f"Error syncing new task: {e}") # エラーログ
+            db.session.rollback()
+
+    # --- Scratchpadタスクの同期 ---
+    scratchpad_tasks = data.get('scratchpad_tasks', [])
+    if scratchpad_tasks:
+        try:
+            master_title = f"{today.strftime('%Y-%m-%d')}のクイックタスク"
+            master_task = MasterTask.query.filter_by(user_id=current_user.id, title=master_title, due_date=today).first()
+            if not master_task:
+                master_task = MasterTask(title=master_title, due_date=today, user_id=current_user.id)
+                db.session.add(master_task)
+                db.session.flush()
+            for task_content in scratchpad_tasks:
+                db.session.add(SubTask(master_id=master_task.id, content=task_content, grid_count=1))
+        except Exception as e:
+            print(f"Error syncing scratchpad tasks: {e}") # エラーログ
+            db.session.rollback()
+            
+    try:
+        db.session.commit()
+    except Exception as e:
+        print(f"Final commit failed during sync: {e}")
+        db.session.rollback()
+        return jsonify({'success': False, 'message': 'データベースへの保存中にエラーが発生しました。'}), 500
+
+    return jsonify({'success': True})
+# ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
 @app.route('/import', methods=['GET', 'POST'])
 @login_required
@@ -649,4 +710,3 @@ if __name__ == '__main__':
                 db.session.commit()
                 print(f"User '{admin_username}' set as admin.")
     app.run(debug=True, port=5000)
-

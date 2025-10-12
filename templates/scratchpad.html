@@ -140,7 +140,7 @@
 
     <script>
     document.addEventListener('DOMContentLoaded', () => {
-        // --- 要素の取得 ---
+        // ... (既存の要素取得、関数定義はほぼそのまま) ...
         const list = document.getElementById('scratch-list');
         const input = document.getElementById('new-scratch-task');
         const addButton = document.getElementById('add-scratch-btn');
@@ -149,8 +149,6 @@
         const mainArea = document.getElementById('scratchpad-main-area');
         const STORAGE_KEY = 'scratchpadTasks';
         const PREVIOUS_STORAGE_KEY = 'scratchpadTasks_previous';
-
-        // --- 関数の定義 ---
 
         const saveTasks = () => {
             const tasks = [];
@@ -194,7 +192,7 @@
         
         const loadTasks = () => {
             const savedTasks = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-            list.innerHTML = ''; // リストをクリアしてから読み込む
+            list.innerHTML = '';
             savedTasks.forEach(task => createTaskElement(task.text, task.completed));
             updateExportButtonState();
         };
@@ -202,34 +200,52 @@
         const addTask = () => {
             const taskText = input.value.trim();
             if (taskText === '') return;
-            
             createTaskElement(taskText, false);
-
             input.value = '';
             input.focus();
             updateExportButtonState();
             saveTasks();
-
             mainArea.scrollTo({ top: mainArea.scrollHeight, behavior: 'smooth' });
         };
 
+        // ▼▼▼ exportTasks関数をオフライン対応に修正 ▼▼▼
         const exportTasks = async () => {
             const uncompletedTasks = [];
             list.querySelectorAll('li:not(.completed) .task-text').forEach(span => {
                 uncompletedTasks.push(span.textContent);
             });
             if (uncompletedTasks.length === 0) { return; }
-            try {
-                const response = await fetch("{{ url_for('export_scratchpad') }}", {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ tasks: uncompletedTasks }),
-                });
-                if (!response.ok) { throw new Error('書き出しに失敗しました。'); }
-                localStorage.removeItem(STORAGE_KEY);
-                localStorage.removeItem(PREVIOUS_STORAGE_KEY); 
-                window.location.href = "{{ url_for('todo_list') }}";
-            } catch (error) { console.error('Export error:', error); }
+
+            // オンラインの場合
+            if (navigator.onLine) {
+                 try {
+                    const response = await fetch("{{ url_for('export_scratchpad') }}", {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ tasks: uncompletedTasks }),
+                    });
+                    if (!response.ok) { throw new Error('書き出しに失敗しました。'); }
+                    localStorage.removeItem(STORAGE_KEY);
+                    localStorage.removeItem(PREVIOUS_STORAGE_KEY); 
+                    window.location.href = "{{ url_for('todo_list') }}";
+                } catch (error) { 
+                    console.error('Export error:', error); 
+                    alert('書き出し中にエラーが発生しました。');
+                }
+            } else { // オフラインの場合
+                try {
+                    await saveScratchpadToOutbox(uncompletedTasks);
+                    await registerBackgroundSync();
+                    alert('オフラインのため、タスクを保存しました。オンラインになったら自動的に同期されます。');
+                    // オフライン保存後もローカルストレージはクリア
+                    localStorage.removeItem(STORAGE_KEY);
+                    localStorage.removeItem(PREVIOUS_STORAGE_KEY);
+                    window.location.href = "{{ url_for('todo_list') }}";
+                } catch (error) {
+                    console.error('Failed to save scratchpad offline:', error);
+                    alert('オフラインでのタスク保存に失敗しました。');
+                }
+            }
         };
 
         const restoreTasks = () => {
@@ -247,9 +263,7 @@
             }
         };
 
-
         // --- 初期化処理とイベントリスナー ---
-
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.has('new')) {
             const currentTasks = localStorage.getItem(STORAGE_KEY);
@@ -259,13 +273,10 @@
             localStorage.removeItem(STORAGE_KEY);
             window.history.replaceState({}, document.title, window.location.pathname);
         }
-
         if (localStorage.getItem(PREVIOUS_STORAGE_KEY)) {
             restoreButton.style.display = 'flex';
         }
-
         loadTasks();
-        
         addButton.addEventListener('click', addTask);
         input.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') { e.preventDefault(); addTask(); }
@@ -276,4 +287,3 @@
     </script>
 </body>
 </html>
-

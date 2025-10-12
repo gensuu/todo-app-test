@@ -26,7 +26,8 @@
                     </div>
                     {% endif %}
 
-                    <form method="post">
+                    {# ▼▼▼ formタグにIDを追加 ▼▼▼ #}
+                    <form method="post" id="task-form">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" name="is_urgent" id="is_urgent" {% if master_task and master_task.is_urgent %}checked{% endif %}>
@@ -34,11 +35,9 @@
                                     緊急のタスクとしてマークする
                                 </label>
                             </div>
-                            <!-- ▼▼▼ テンプレートとして保存ボタンを追加 ▼▼▼ -->
                             <button type="submit" name="save_as_template" value="true" class="btn btn-outline-secondary btn-sm rounded-circle" title="現在の内容をテンプレートとして保存">
                                 <i class="bi bi-bookmark-plus"></i>
                             </button>
-                            <!-- ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ -->
                         </div>
                         <div class="mb-3">
                             <label for="master_title" class="form-label">親タスクのタイトル</label>
@@ -52,14 +51,14 @@
                         
                         <h5 class="mb-3">サブタスク</h5>
                         <div id="subtasks-container">
-                            <!-- JavaScript will populate this -->
-                        </div>
+                            </div>
 
                         <div class="d-grid gap-2 d-md-flex justify-content-md-between mt-4">
                             <button type="button" id="add-subtask-btn" class="btn btn-secondary"><i class="bi bi-plus-circle"></i> サブタスクを追加</button>
                             <div>
                                 <a href="{{ url_for('todo_list') }}" class="btn btn-outline-secondary">キャンセル</a>
-                                <button type="submit" class="btn btn-primary">保存する</button>
+                                {# ▼▼▼ buttonのtypeをbuttonに変更し、IDを追加 ▼▼▼ #}
+                                <button type="button" id="save-task-btn" class="btn btn-primary">保存する</button>
                             </div>
                         </div>
                     </form>
@@ -73,6 +72,7 @@
 {% block scripts %}
 <script>
     document.addEventListener('DOMContentLoaded', () => {
+        // ... (既存の createSubtaskRow, populateSubtasks, テンプレート選択のロジックはそのまま) ...
         const container = document.getElementById('subtasks-container');
         const addBtn = document.getElementById('add-subtask-btn');
         const maxSubtasks = 20;
@@ -143,7 +143,62 @@
                 e.target.closest('.subtask-row').remove();
             }
         });
+
+        // ▼▼▼ ここからオフライン対応のロジックを追加 ▼▼▼
+        const saveButton = document.getElementById('save-task-btn');
+        const form = document.getElementById('task-form');
+
+        saveButton.addEventListener('click', async () => {
+            // 編集モードはオフライン非対応とする（簡略化のため）
+            {% if master_task %}
+                form.action = "{{ url_for('add_or_edit_task', master_id=master_task.id) }}";
+                form.submit();
+                return;
+            {% endif %}
+
+            // フォームの入力内容をオブジェクトとして収集
+            const subtasks = [];
+            document.querySelectorAll('.subtask-row').forEach((row, index) => {
+                const contentInput = row.querySelector(`input[name^="sub_content_"]`);
+                const gridCountInput = row.querySelector(`input[name^="grid_count_"]`);
+                if (contentInput && contentInput.value.trim() !== '' && gridCountInput && gridCountInput.value) {
+                    subtasks.push({
+                        content: contentInput.value.trim(),
+                        grid_count: parseInt(gridCountInput.value, 10)
+                    });
+                }
+            });
+
+            if (document.getElementById('master_title').value.trim() === '' || subtasks.length === 0) {
+                alert('親タスクのタイトルと、最低1つのサブタスクを入力してください。');
+                return;
+            }
+
+            const taskData = {
+                title: document.getElementById('master_title').value.trim(),
+                due_date: document.getElementById('due_date').value,
+                is_urgent: document.getElementById('is_urgent').checked,
+                subtasks: subtasks
+            };
+            
+            // オンラインなら直接フォームを送信
+            if (navigator.onLine) {
+                form.action = "{{ url_for('add_or_edit_task') }}";
+                form.submit();
+            } else {
+                // オフラインならIndexedDBに保存して同期を予約
+                try {
+                    await saveTaskToOutbox(taskData);
+                    await registerBackgroundSync();
+                    // ユーザーにフィードバック
+                    alert('オフラインのため、タスクを保存しました。オンラインになったら自動的に同期されます。');
+                    window.location.href = "{{ url_for('todo_list') }}";
+                } catch (error) {
+                    console.error('Failed to save task offline:', error);
+                    alert('オフラインでのタスク保存に失敗しました。');
+                }
+            }
+        });
     });
 </script>
 {% endblock %}
-
