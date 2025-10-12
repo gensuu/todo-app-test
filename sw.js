@@ -1,17 +1,17 @@
-// キャッシュのバージョンを更新し、すべての機能を統合した最終版
-const CACHE_NAME = 'todo-grid-cache-v11'; // バージョンを更新
+// キャッシュのバージョンを更新
+const CACHE_NAME = 'todo-grid-cache-v12';
 
 // 新しいオフライン用JSをインポート
 self.importScripts('/static/offline.js');
 
 // アプリの骨格となる静的なファイル (App Shell)
 const APP_SHELL_FILES = [
-  '/', // ルートもキャッシュに含める
+  '/', 
   '/login',
   '/register',
   '/scratchpad',
   '/static/style.css',
-  '/static/offline.js', // offline.jsを追加
+  '/static/offline.js',
   '/static/images/icon-192x192.png',
   '/static/images/icon-512x512.png',
   'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css',
@@ -47,23 +47,46 @@ self.addEventListener('activate', event => {
   );
 });
 
-// ▼▼▼ バックグラウンド同期のイベントリスナーを追加 ▼▼▼
+// バックグラウンド同期のイベントリスナー
 self.addEventListener('sync', event => {
-  if (event.tag === SYNC_TAG) {
+  if (event.tag === 'background-sync') {
       console.log('Sync event triggered!');
       event.waitUntil(sendQueueToServer());
   }
 });
-// ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
 // リクエストに応答する処理
 self.addEventListener('fetch', event => {
-  // GETリクエスト以外はネットワークに任せる (API呼び出しなど)
+  // GETリクエスト以外はネットワークに任せる
   if (event.request.method !== 'GET') {
     return;
   }
-  
-  // Stale-While-Revalidate 戦略
+
+  const url = new URL(event.request.url);
+
+  // ▼▼▼ 【修正点】scratchpadへのリクエストを特別に処理 ▼▼▼
+  // URLにクエリパラメータ(?new=trueなど)が付いていても、キャッシュから /scratchpad を探して返す
+  if (url.pathname === '/scratchpad') {
+    event.respondWith(
+      caches.open(CACHE_NAME).then(cache => {
+        return cache.match('/scratchpad').then(cachedResponse => {
+          const fetchPromise = fetch(event.request).then(networkResponse => {
+            // オンライン時は最新のものをキャッシュに保存
+            if (networkResponse && networkResponse.status === 200) {
+              cache.put('/scratchpad', networkResponse.clone());
+            }
+            return networkResponse;
+          });
+          // オフラインならキャッシュを返し、オンラインならネットワークの結果を優先
+          return cachedResponse || fetchPromise;
+        });
+      })
+    );
+    return; // このリクエストの処理はここまで
+  }
+  // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
+  // その他のリクエストは Stale-While-Revalidate 戦略
   event.respondWith(
     caches.open(CACHE_NAME).then(cache => {
       return cache.match(event.request).then(response => {
