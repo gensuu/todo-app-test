@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+venv/
+.env
+
+# Database
+instance/
+*.db
+
+# Secret files
+service_account.json
+
+# Backup files
+static/back up style.css
+
+# Environment variables
+.env

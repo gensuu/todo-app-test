@@ -1,5 +1,5 @@
 // キャッシュのバージョンを更新
-const CACHE_NAME = 'todo-grid-cache-v15-corrected-path';
+const CACHE_NAME = 'todo-grid-cache-v14-full-with-calendar';
 
 // オフライン処理用のスクリプトをインポート
 self.importScripts('/static/offline.js');
@@ -9,7 +9,7 @@ const APP_SHELL_FILES = [
   '/',
   '/todo',
   '/add_or_edit_task',
-  '/templates', // Corrected path
+  '/manage_templates',
   '/import',
   '/settings',
   '/scratchpad',

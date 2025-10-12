@@ -207,20 +207,66 @@
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     // --- サーバーから渡されたタスクデータをJS変数に格納し、ローカルストレージを初期化 ---
-    const tasksFromServer = {{ master_tasks_for_js | tojson | safe }};
-    
-    // この関数は offline.js にあると仮定しますが、ここでは定義されていないため、
-    // ひとまずグローバルスコープに関数を定義します。
-    // 本来は offline.js 側で処理するべきです。
-    function initializeLocalTasks(tasks) {
-        // この関数は、サーバーからのタスクでローカルの状態を初期化または更新します。
-        // ここでは単純化のため、何もしないか、コンソールに出力するだけにします。
-        console.log("Initializing tasks from server:", tasks);
-    }
-
+    const tasksFromServer = {{ master_tasks | tojson | safe }};
     initializeLocalTasks(tasksFromServer);
     
     const taskListContainer = document.getElementById('task-list-container');
+
+    // --- タスクリストを描画する関数 ---
+    function renderTasks() {
+        const masterTasks = getLocalTasks();
+        // コンテナの中身をクリア
+        taskListContainer.innerHTML = '<h2>タスク一覧</h2>';
+
+        if (!masterTasks || masterTasks.length === 0) {
+            taskListContainer.innerHTML += `
+                <div class="card card-body text-center">
+                    <p class="mb-0">この日に表示するタスクはありません。</p>
+                </div>`;
+            return;
+        }
+
+        masterTasks.forEach(masterTask => {
+            if (!masterTask.visible_subtasks || masterTask.visible_subtasks.length === 0) return;
+
+            const card = document.createElement('div');
+            card.className = `card master-task-card mb-3 ${masterTask.all_completed ? 'all-completed' : ''}`;
+            
+            let subtasksHtml = '';
+            masterTask.visible_subtasks.forEach(subtask => {
+                subtasksHtml += `
+                    <li class="list-group-item sub-task d-flex align-items-center ${subtask.is_completed ? 'completed' : ''}" data-subtask-id="${subtask.id}">
+                        <i class="bi ${subtask.is_completed ? 'bi-check-square-fill' : 'bi-square'} complete-toggle" style="cursor: pointer; margin-right: 10px;"></i>
+                        <span class="flex-grow-1">
+                            ${subtask.content} (${subtask.grid_count}マス)
+                        </span>
+                    </li>`;
+            });
+
+            // 期限日のフォーマット (簡易版)
+            const dueDate = masterTask.due_date ? `(${masterTask.due_date.substring(5).replace('-', '/')})` : '';
+            const masterId = isNaN(parseInt(masterTask.id)) ? '' : masterTask.id; // オフラインIDは編集不可
+
+            card.innerHTML = `
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span class="task-title-clickable ${masterTask.is_urgent ? 'text-urgent' : ''}"
+                          data-bs-toggle="modal" 
+                          data-bs-target="#taskFocusModal"
+                          data-task-title="${masterTask.title}"
+                          data-task-subtasks='${masterTask.visible_subtasks_json || "[]"}'>
+                        ${masterTask.title}
+                        <small class="text-muted">${dueDate}</small>
+                    </span>
+                    ${masterId ? `<a href="/add_or_edit_task/${masterId}" class="btn btn-sm btn-outline-light">[編集]</a>` : ''}
+                </div>
+                <ul class="list-group list-group-flush">${subtasksHtml}</ul>`;
+            
+            taskListContainer.appendChild(card);
+        });
+
+        // イベントリスナーを再設定
+        setupEventListeners();
+    }
 
     // --- タスク完了のイベントリスナーを設定する関数 ---
     function setupEventListeners() {
@@ -228,38 +274,43 @@ document.addEventListener('DOMContentLoaded', () => {
             toggle.addEventListener('click', async (e) => {
                 const subtaskLi = e.target.closest('li');
                 const subtaskId = subtaskLi.dataset.subtaskId;
-                
+                const isCompleted = !subtaskLi.classList.contains('completed');
+
                 // UIを即時更新 (Optimistic Update)
                 subtaskLi.classList.toggle('completed');
                 e.target.classList.toggle('bi-check-square-fill');
                 e.target.classList.toggle('bi-square');
 
-                // APIを叩いてサーバーのデータを更新
-                try {
-                    const response = await fetch(`/api/complete_subtask/${subtaskId}`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
+                // ローカルストレージのデータを更新
+                const masterTasks = getLocalTasks();
+                let taskUpdated = false;
+                for (const mt of masterTasks) {
+                    for (const st of mt.visible_subtasks) {
+                        if (st.id == subtaskId) { // 型が違う可能性があるので == で比較
+                            st.is_completed = isCompleted;
+                            taskUpdated = true;
+                            break;
                         }
-                    });
-                    const data = await response.json();
-                    if (!data.success) {
-                        // 失敗したらUIを元に戻す
-                        console.error('Failed to update task status on server.');
-                        subtaskLi.classList.toggle('completed');
-                        e.target.classList.toggle('bi-check-square-fill');
-                        e.target.classList.toggle('bi-square');
-                    } else {
-                        // 成功したらページをリロードしてグリッドなどを更新
-                        location.reload();
                     }
-                } catch (error) {
-                    console.error('Error:', error);
-                    // エラー発生時もUIを元に戻す
-                    subtaskLi.classList.toggle('completed');
-                    e.target.classList.toggle('bi-check-square-fill');
-                    e.target.classList.toggle('bi-square');
+                    if(taskUpdated) break;
                 }
+                saveLocalTasks(masterTasks);
+
+                // 同期キューに操作を追加
+                await addToSyncQueue({
+                    type: 'COMPLETE_SUBTASK',
+                    payload: {
+                        id: isNaN(parseInt(subtaskId)) ? subtaskId : parseInt(subtaskId),
+                        is_completed: isCompleted,
+                    }
+                });
+                
+                // オンラインなら即時同期を試みる
+                if(navigator.onLine) {
+                    await sendQueueToServer();
+                }
+                // UIの進捗表示などを再計算するためにリロード
+                location.reload();
             });
         });
 
@@ -284,7 +335,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             li.dataset.subtaskId = subtask.id;
                             const iconClass = subtask.is_completed ? 'bi-check-square-fill' : 'bi-square';
                             li.innerHTML = `
-                                <i class="bi ${iconClass}" style="margin-right: 10px;"></i>
+                                <i class="bi ${iconClass} complete-toggle-modal" style="cursor: pointer; margin-right: 10px;"></i>
                                 <span class="flex-grow-1">${subtask.content} (${subtask.grid_count}マス)</span>`;
                             modalBodyList.appendChild(li);
                         });
@@ -298,8 +349,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- 初期描画時にイベントリスナーを設定 ---
-    setupEventListeners();
+    // --- 初期描画 ---
+    renderTasks();
 });
 </script>
 {% endblock %}

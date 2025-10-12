@@ -320,40 +320,16 @@ def todo_list(date_str=None):
         MasterTask.user_id == current_user.id,
         MasterTask.subtasks.any(or_(SubTask.is_completed == False, SubTask.completion_date == target_date))
     )
-    master_tasks_result = master_tasks_query.order_by(MasterTask.is_urgent.desc(), MasterTask.due_date.asc(), MasterTask.id.asc()).all()
+    master_tasks = master_tasks_query.order_by(MasterTask.is_urgent.desc(), MasterTask.due_date.asc(), MasterTask.id.asc()).all()
     
-    master_tasks_for_template = []
-    master_tasks_for_js = []
-
-    for mt in master_tasks_result:
-        visible_subtasks = [st for st in mt.subtasks if not st.is_completed or st.completion_date == target_date]
-        if not visible_subtasks:
-            continue
-
-        # 1. テンプレート描画用に、オブジェクトに必要な属性を追加
-        mt.visible_subtasks = visible_subtasks
-        subtasks_as_dicts = [
+    for mt in master_tasks:
+        mt.visible_subtasks = [st for st in mt.subtasks if not st.is_completed or st.completion_date == target_date]
+        mt.visible_subtasks_json = json.dumps([
             {"id": st.id, "content": st.content, "is_completed": st.is_completed, "grid_count": st.grid_count} 
-            for st in visible_subtasks
-        ]
-        mt.visible_subtasks_json = json.dumps(subtasks_as_dicts)
-        mt.all_completed = all(st.is_completed for st in visible_subtasks)
-        master_tasks_for_template.append(mt)
-
-        # 2. JavaScript用に、シリアライズ可能な辞書を作成
-        master_tasks_for_js.append({
-            "id": mt.id,
-            "title": mt.title,
-            "due_date": mt.due_date.isoformat(),
-            "is_urgent": mt.is_urgent,
-            "visible_subtasks_json": mt.visible_subtasks_json,
-            "all_completed": mt.all_completed,
-            "visible_subtasks": subtasks_as_dicts
-        })
-
-    # 変数名を更新
-    master_tasks = master_tasks_for_template
-    
+            for st in mt.visible_subtasks
+        ])
+        mt.all_completed = all(st.is_completed for st in mt.visible_subtasks) if mt.visible_subtasks else False
+    master_tasks = [mt for mt in master_tasks if mt.visible_subtasks]
     all_subtasks_for_day = [st for mt in master_tasks for st in mt.visible_subtasks]
     total_grid_count = sum(sub.grid_count for sub in all_subtasks_for_day)
     completed_grid_count = sum(sub.grid_count for sub in all_subtasks_for_day if sub.is_completed)
@@ -361,7 +337,6 @@ def todo_list(date_str=None):
     required_rows = math.ceil(total_grid_count / GRID_COLS) if total_grid_count > 0 else 1
     grid_rows = max(base_rows, required_rows)
     latest_summary = DailySummary.query.filter(DailySummary.user_id == current_user.id).order_by(DailySummary.summary_date.desc()).first()
-    
     return render_template(
         'index.html', master_tasks=master_tasks, current_date=target_date, date=date, 
         timedelta=timedelta, total_grid_count=total_grid_count, completed_grid_count=completed_grid_count, 
@@ -369,8 +344,7 @@ def todo_list(date_str=None):
         calendar=calendar, cal_year=cal_year, cal_month=cal_month, task_counts=task_counts,
         prev_month_str=prev_month_first_day.strftime('%Y-%m'), 
         next_month_str=next_month_first_day.strftime('%Y-%m'),
-        today=get_jst_today(),
-        master_tasks_for_js=master_tasks_for_js # JS用の変数を追加
+        today=get_jst_today()
     )
     
 @app.route('/add_or_edit_task', methods=['GET', 'POST'])

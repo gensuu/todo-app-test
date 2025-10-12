@@ -1,0 +1,104 @@
+{% extends "layout.html" %}
+{% block title %}テンプレート管理{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+    <div class="row">
+        <!-- New Template Form -->
+        <div class="col-lg-6 mb-5">
+            <div class="card">
+                <div class="card-header">
+                    <h3>新しいテンプレートを作成</h3>
+                </div>
+                <div class="card-body">
+                    <form method="post" action="{{ url_for('manage_templates') }}">
+                        <div class="mb-3">
+                            <label for="template_title" class="form-label">テンプレート名</label>
+                            <input type="text" class="form-control" id="template_title" name="template_title" required>
+                        </div>
+                        <hr>
+                        <h5 class="mb-3">サブタスク</h5>
+                        <div id="subtasks-container">
+                            <!-- JS will populate this -->
+                        </div>
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-between mt-4">
+                            <button type="button" id="add-subtask-btn" class="btn btn-secondary"><i class="bi bi-plus-circle"></i> サブタスクを追加</button>
+                            <div>
+                                <a href="{{ url_for('todo_list') }}" class="btn btn-outline-secondary">戻る</a>
+                                <button type="submit" class="btn btn-primary">テンプレートを保存</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Existing Templates List -->
+        <div class="col-lg-6">
+            <h3>既存のテンプレート</h3>
+            {% for template in templates %}
+                <div class="card mb-3">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span>{{ template.title }}</span>
+                        <form action="{{ url_for('delete_template', template_id=template.id) }}" method="post" onsubmit="return confirm('本当にこのテンプレートを削除しますか？');">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">削除</button>
+                        </form>
+                    </div>
+                    <ul class="list-group list-group-flush">
+                        {% for sub in template.subtask_templates %}
+                            <li class="list-group-item">{{ sub.content }} ({{ sub.grid_count }}マス)</li>
+                        {% else %}
+                             <li class="list-group-item">サブタスクがありません。</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% else %}
+                <p>保存されているテンプレートはありません。</p>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const container = document.getElementById('subtasks-container');
+        const addBtn = document.getElementById('add-subtask-btn');
+        const maxSubtasks = 20;
+        let subtaskCounter = 0;
+
+        const createSubtaskRow = (task = { content: '', grid_count: 1 }) => {
+            if (subtaskCounter >= maxSubtasks) return;
+            subtaskCounter++;
+            const row = document.createElement('div');
+            row.classList.add('row', 'g-2', 'mb-2', 'align-items-center', 'subtask-row');
+            row.innerHTML = `
+                <div class="col">
+                    <input type="text" class="form-control" name="sub_content_${subtaskCounter}" placeholder="サブタスクの内容" value="${task.content}" required>
+                </div>
+                <div class="col-4 col-md-3">
+                    <div class="input-group">
+                        <input type="number" class="form-control" name="grid_count_${subtaskCounter}" min="1" value="${task.grid_count}" required>
+                        <span class="input-group-text">マス</span>
+                    </div>
+                </div>
+                <div class="col-auto">
+                    <button type="button" class="btn btn-sm btn-danger remove-subtask-btn"><i class="bi bi-trash"></i></button>
+                </div>
+            `;
+            container.appendChild(row);
+        };
+        
+        createSubtaskRow();
+
+        addBtn.addEventListener('click', () => createSubtaskRow());
+        container.addEventListener('click', (e) => {
+            if (e.target.closest('.remove-subtask-btn')) {
+                e.target.closest('.subtask-row').remove();
+            }
+        });
+    });
+</script>
+{% endblock %}
+
