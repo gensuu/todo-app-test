@@ -4,7 +4,6 @@
 
 {% block content %}
 <div class="row">
-    <!-- Left Sidebar (Desktop/Tablet) -->
     <aside class="col-md-3 d-none d-md-block sidebar-left">
         <div class="sidebar-sticky">
             <h2 class="sidebar-title">メニュー</h2>
@@ -33,7 +32,6 @@
         </div>
     </aside>
 
-    <!-- Main Content -->
     <main class="col-md-6 col-lg-6 main-content">
         <header class="text-center my-4">
             <h1>Todoリスト</h1>
@@ -68,7 +66,7 @@
             </div>
         </div>
 
-        <div class="task-list-container">
+        <div class="task-list-container" id="task-list-container">
             <h2>タスク一覧</h2>
             {% for master_task in master_tasks %}
                 {% if master_task.visible_subtasks %}
@@ -110,7 +108,6 @@
         </div>
     </main>
 
-    <!-- Right Sidebar (Desktop/Tablet) -->
     <aside class="col-md-3 d-none d-md-block sidebar-right">
         <div class="sidebar-sticky">
             <div class="card calendar-card mb-4">
@@ -179,7 +176,6 @@
     </aside>
 </div>
 
-<!-- Mobile Bottom Navigation -->
 <nav class="d-md-none navbar fixed-bottom navbar-dark bg-dark">
     <div class="container-fluid justify-content-around">
         <a href="{{ url_for('scratchpad', new='true') }}" class="btn btn-secondary scratchpad-btn-mobile" title="今からTodo"><i class="bi bi-pencil-square"></i></a>
@@ -191,7 +187,6 @@
     </div>
 </nav>
 
-<!-- Task Focus Modal -->
 <div class="modal fade" id="taskFocusModal" tabindex="-1" aria-labelledby="taskFocusModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
@@ -201,8 +196,7 @@
             </div>
             <div class="modal-body">
                 <ul class="list-group list-group-flush" id="focus-subtask-list">
-                    <!-- JavaScript will populate this -->
-                </ul>
+                    </ul>
             </div>
         </div>
     </div>
@@ -212,106 +206,151 @@
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    // メインページのチェックボックス機能
-    document.querySelectorAll('.complete-toggle').forEach(toggle => {
-        toggle.addEventListener('click', async () => {
-            const subtaskId = toggle.closest('li').dataset.subtaskId;
-            try {
-                const response = await fetch(`/api/complete_subtask/${subtaskId}`, { method: 'POST' });
-                if (!response.ok) throw new Error('Network response was not ok');
-                location.reload();
-            } catch (error) {
-                console.error('タスク更新エラー:', error);
-            }
-        });
-    });
+    // --- サーバーから渡されたタスクデータをJS変数に格納し、ローカルストレージを初期化 ---
+    const tasksFromServer = {{ master_tasks | tojson | safe }};
+    initializeLocalTasks(tasksFromServer);
+    
+    const taskListContainer = document.getElementById('task-list-container');
 
-    // 進捗サークルの表示
-    const circle = document.querySelector('.progress-circle');
-    if (circle) {
-        const total = parseInt("{{ total_grid_count or 0 }}", 10);
-        const completed = parseInt("{{ completed_grid_count or 0 }}", 10);
-        const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
-        circle.querySelector('.progress-text').textContent = `${progress}%`;
-        circle.style.setProperty('--progress', `${progress}%`);
-    }
+    // --- タスクリストを描画する関数 ---
+    function renderTasks() {
+        const masterTasks = getLocalTasks();
+        // コンテナの中身をクリア
+        taskListContainer.innerHTML = '<h2>タスク一覧</h2>';
 
-    // タスク詳細モーダルの処理
-    const taskFocusModal = document.getElementById('taskFocusModal');
-    if (taskFocusModal) {
-        let toggledSubtaskIds = new Set();
+        if (!masterTasks || masterTasks.length === 0) {
+            taskListContainer.innerHTML += `
+                <div class="card card-body text-center">
+                    <p class="mb-0">この日に表示するタスクはありません。</p>
+                </div>`;
+            return;
+        }
 
-        taskFocusModal.addEventListener('show.bs.modal', event => {
-            toggledSubtaskIds.clear(); 
-            const triggerElement = event.relatedTarget;
-            const taskTitle = triggerElement.getAttribute('data-task-title');
-            const subtasks = JSON.parse(triggerElement.getAttribute('data-task-subtasks'));
-            const modalTitle = taskFocusModal.querySelector('.modal-title');
-            const modalBodyList = taskFocusModal.querySelector('#focus-subtask-list');
+        masterTasks.forEach(masterTask => {
+            if (!masterTask.visible_subtasks || masterTask.visible_subtasks.length === 0) return;
+
+            const card = document.createElement('div');
+            card.className = `card master-task-card mb-3 ${masterTask.all_completed ? 'all-completed' : ''}`;
             
-            modalTitle.textContent = taskTitle;
-            modalBodyList.innerHTML = '';
-
-            if (subtasks && subtasks.length > 0) {
-                subtasks.forEach(subtask => {
-                    const li = document.createElement('li');
-                    li.classList.add('list-group-item', 'sub-task', 'd-flex', 'align-items-center');
-                    if (subtask.is_completed) {
-                        li.classList.add('completed');
-                    }
-                    li.dataset.subtaskId = subtask.id;
-
-                    const iconClass = subtask.is_completed ? 'bi-check-square-fill' : 'bi-square';
-                    li.innerHTML = `
-                        <i class="bi ${iconClass} complete-toggle-modal" style="cursor: pointer; margin-right: 10px;"></i>
-                        <span class="flex-grow-1">${subtask.content} (${subtask.grid_count}マス)</span>
-                    `;
-                    modalBodyList.appendChild(li);
-                });
-
-                modalBodyList.querySelectorAll('.complete-toggle-modal').forEach(toggle => {
-                    toggle.addEventListener('click', function() {
-                        const li = this.closest('li');
-                        const subtaskId = li.dataset.subtaskId;
-
-                        if (toggledSubtaskIds.has(subtaskId)) {
-                            toggledSubtaskIds.delete(subtaskId);
-                        } else {
-                            toggledSubtaskIds.add(subtaskId);
-                        }
-                        
-                        li.classList.toggle('completed');
-                        this.classList.toggle('bi-check-square-fill');
-                        this.classList.toggle('bi-square');
-                    });
-                });
-
-            } else {
-                const li = document.createElement('li');
-                li.classList.add('list-group-item');
-                li.textContent = 'サブタスクはありません。';
-                modalBodyList.appendChild(li);
-            }
-        });
-
-        taskFocusModal.addEventListener('hidden.bs.modal', async () => {
-            if (toggledSubtaskIds.size === 0) {
-                return;
-            }
-
-            const promises = Array.from(toggledSubtaskIds).map(id => {
-                return fetch(`/api/complete_subtask/${id}`, { method: 'POST' });
+            let subtasksHtml = '';
+            masterTask.visible_subtasks.forEach(subtask => {
+                subtasksHtml += `
+                    <li class="list-group-item sub-task d-flex align-items-center ${subtask.is_completed ? 'completed' : ''}" data-subtask-id="${subtask.id}">
+                        <i class="bi ${subtask.is_completed ? 'bi-check-square-fill' : 'bi-square'} complete-toggle" style="cursor: pointer; margin-right: 10px;"></i>
+                        <span class="flex-grow-1">
+                            ${subtask.content} (${subtask.grid_count}マス)
+                        </span>
+                    </li>`;
             });
 
-            try {
-                await Promise.all(promises);
-                location.reload();
-            } catch (error) {
-                console.error('一括タスク更新エラー:', error);
-            }
+            // 期限日のフォーマット (簡易版)
+            const dueDate = masterTask.due_date ? `(${masterTask.due_date.substring(5).replace('-', '/')})` : '';
+            const masterId = isNaN(parseInt(masterTask.id)) ? '' : masterTask.id; // オフラインIDは編集不可
+
+            card.innerHTML = `
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span class="task-title-clickable ${masterTask.is_urgent ? 'text-urgent' : ''}"
+                          data-bs-toggle="modal" 
+                          data-bs-target="#taskFocusModal"
+                          data-task-title="${masterTask.title}"
+                          data-task-subtasks='${masterTask.visible_subtasks_json || "[]"}'>
+                        ${masterTask.title}
+                        <small class="text-muted">${dueDate}</small>
+                    </span>
+                    ${masterId ? `<a href="/add_or_edit_task/${masterId}" class="btn btn-sm btn-outline-light">[編集]</a>` : ''}
+                </div>
+                <ul class="list-group list-group-flush">${subtasksHtml}</ul>`;
+            
+            taskListContainer.appendChild(card);
         });
+
+        // イベントリスナーを再設定
+        setupEventListeners();
     }
+
+    // --- タスク完了のイベントリスナーを設定する関数 ---
+    function setupEventListeners() {
+        document.querySelectorAll('.complete-toggle').forEach(toggle => {
+            toggle.addEventListener('click', async (e) => {
+                const subtaskLi = e.target.closest('li');
+                const subtaskId = subtaskLi.dataset.subtaskId;
+                const isCompleted = !subtaskLi.classList.contains('completed');
+
+                // UIを即時更新 (Optimistic Update)
+                subtaskLi.classList.toggle('completed');
+                e.target.classList.toggle('bi-check-square-fill');
+                e.target.classList.toggle('bi-square');
+
+                // ローカルストレージのデータを更新
+                const masterTasks = getLocalTasks();
+                let taskUpdated = false;
+                for (const mt of masterTasks) {
+                    for (const st of mt.visible_subtasks) {
+                        if (st.id == subtaskId) { // 型が違う可能性があるので == で比較
+                            st.is_completed = isCompleted;
+                            taskUpdated = true;
+                            break;
+                        }
+                    }
+                    if(taskUpdated) break;
+                }
+                saveLocalTasks(masterTasks);
+
+                // 同期キューに操作を追加
+                await addToSyncQueue({
+                    type: 'COMPLETE_SUBTASK',
+                    payload: {
+                        id: isNaN(parseInt(subtaskId)) ? subtaskId : parseInt(subtaskId),
+                        is_completed: isCompleted,
+                    }
+                });
+                
+                // オンラインなら即時同期を試みる
+                if(navigator.onLine) {
+                    await sendQueueToServer();
+                }
+                // UIの進捗表示などを再計算するためにリロード
+                location.reload();
+            });
+        });
+
+        // モーダル関連のイベントリスナーもここに設定
+        const taskFocusModal = document.getElementById('taskFocusModal');
+        if (taskFocusModal) {
+            taskFocusModal.addEventListener('show.bs.modal', event => {
+                const triggerElement = event.relatedTarget;
+                const taskTitle = triggerElement.getAttribute('data-task-title');
+                try {
+                    const subtasks = JSON.parse(triggerElement.getAttribute('data-task-subtasks'));
+                    const modalTitle = taskFocusModal.querySelector('.modal-title');
+                    const modalBodyList = taskFocusModal.querySelector('#focus-subtask-list');
+                    
+                    modalTitle.textContent = taskTitle;
+                    modalBodyList.innerHTML = '';
+
+                    if (subtasks && subtasks.length > 0) {
+                        subtasks.forEach(subtask => {
+                             const li = document.createElement('li');
+                            li.className = `list-group-item sub-task d-flex align-items-center ${subtask.is_completed ? 'completed' : ''}`;
+                            li.dataset.subtaskId = subtask.id;
+                            const iconClass = subtask.is_completed ? 'bi-check-square-fill' : 'bi-square';
+                            li.innerHTML = `
+                                <i class="bi ${iconClass} complete-toggle-modal" style="cursor: pointer; margin-right: 10px;"></i>
+                                <span class="flex-grow-1">${subtask.content} (${subtask.grid_count}マス)</span>`;
+                            modalBodyList.appendChild(li);
+                        });
+                    } else {
+                         modalBodyList.innerHTML = '<li class="list-group-item">サブタスクはありません。</li>';
+                    }
+                } catch(e) {
+                     console.error("Failed to parse subtasks for modal:", e);
+                }
+            });
+        }
+    }
+
+    // --- 初期描画 ---
+    renderTasks();
 });
 </script>
 {% endblock %}
-

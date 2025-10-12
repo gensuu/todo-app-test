@@ -138,9 +138,9 @@
         <button class="btn btn-add" id="add-scratch-btn">+</button>
     </div>
 
+    <script src="{{ url_for('static', filename='offline.js') }}"></script>
     <script>
     document.addEventListener('DOMContentLoaded', () => {
-        // ... (既存の要素取得、関数定義はほぼそのまま) ...
         const list = document.getElementById('scratch-list');
         const input = document.getElementById('new-scratch-task');
         const addButton = document.getElementById('add-scratch-btn');
@@ -208,7 +208,6 @@
             mainArea.scrollTo({ top: mainArea.scrollHeight, behavior: 'smooth' });
         };
 
-        // ▼▼▼ exportTasks関数をオフライン対応に修正 ▼▼▼
         const exportTasks = async () => {
             const uncompletedTasks = [];
             list.querySelectorAll('li:not(.completed) .task-text').forEach(span => {
@@ -216,36 +215,21 @@
             });
             if (uncompletedTasks.length === 0) { return; }
 
-            // オンラインの場合
-            if (navigator.onLine) {
-                 try {
-                    const response = await fetch("{{ url_for('export_scratchpad') }}", {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ tasks: uncompletedTasks }),
-                    });
-                    if (!response.ok) { throw new Error('書き出しに失敗しました。'); }
-                    localStorage.removeItem(STORAGE_KEY);
-                    localStorage.removeItem(PREVIOUS_STORAGE_KEY); 
-                    window.location.href = "{{ url_for('todo_list') }}";
-                } catch (error) { 
-                    console.error('Export error:', error); 
-                    alert('書き出し中にエラーが発生しました。');
+            // 同期キューに操作を追加
+            await addToSyncQueue({
+                type: 'EXPORT_SCRATCHPAD',
+                payload: {
+                    tasks: uncompletedTasks
                 }
-            } else { // オフラインの場合
-                try {
-                    await saveScratchpadToOutbox(uncompletedTasks);
-                    await registerBackgroundSync();
-                    alert('オフラインのため、タスクを保存しました。オンラインになったら自動的に同期されます。');
-                    // オフライン保存後もローカルストレージはクリア
-                    localStorage.removeItem(STORAGE_KEY);
-                    localStorage.removeItem(PREVIOUS_STORAGE_KEY);
-                    window.location.href = "{{ url_for('todo_list') }}";
-                } catch (error) {
-                    console.error('Failed to save scratchpad offline:', error);
-                    alert('オフラインでのタスク保存に失敗しました。');
-                }
-            }
+            });
+            
+            // ローカルストレージをクリア
+            localStorage.removeItem(STORAGE_KEY);
+            localStorage.removeItem(PREVIOUS_STORAGE_KEY);
+            
+            // ユーザーにフィードバックしてリダイレクト
+            alert('タスクを一覧に書き出しました。オフラインの場合、後で自動的に同期されます。');
+            window.location.href = "{{ url_for('todo_list') }}";
         };
 
         const restoreTasks = () => {

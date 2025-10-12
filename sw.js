@@ -1,15 +1,20 @@
 // キャッシュのバージョンを更新
-const CACHE_NAME = 'todo-grid-cache-v12';
+const CACHE_NAME = 'todo-grid-cache-v14-full-with-calendar';
 
-// 新しいオフライン用JSをインポート
+// オフライン処理用のスクリプトをインポート
 self.importScripts('/static/offline.js');
 
-// アプリの骨格となる静的なファイル (App Shell)
+// アプリの全機能をキャッシュ対象に追加
 const APP_SHELL_FILES = [
-  '/', 
+  '/',
+  '/todo',
+  '/add_or_edit_task',
+  '/manage_templates',
+  '/import',
+  '/settings',
+  '/scratchpad',
   '/login',
   '/register',
-  '/scratchpad',
   '/static/style.css',
   '/static/offline.js',
   '/static/images/icon-192x192.png',
@@ -24,11 +29,52 @@ self.addEventListener('install', event => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then(async cache => {
-      console.log('Cache opened. Caching app shell...');
+      console.log('Cache opened. Caching app shell and calendar pages...');
+
+      // --- ▼▼▼ カレンダーページのURLを動的に生成 ▼▼▼ ---
+      const calendarUrls = [];
+      const today = new Date();
+      const daysToCache = 180; // 約半年
+
+      // 過去の日付を生成
+      for (let i = daysToCache; i > 0; i--) {
+        const targetDate = new Date(today);
+        targetDate.setDate(today.getDate() - i);
+        const year = targetDate.getFullYear();
+        const month = String(targetDate.getMonth() + 1).padStart(2, '0');
+        const day = String(targetDate.getDate()).padStart(2, '0');
+        calendarUrls.push(`/todo/${year}-${month}-${day}`);
+      }
+      
+      // 未来の日付を生成 (今日を含む)
+      for (let i = 0; i <= daysToCache; i++) {
+        const targetDate = new Date(today);
+        targetDate.setDate(today.getDate() + i);
+        const year = targetDate.getFullYear();
+        const month = String(targetDate.getMonth() + 1).padStart(2, '0');
+        const day = String(targetDate.getDate()).padStart(2, '0');
+        calendarUrls.push(`/todo/${year}-${month}-${day}`);
+      }
+      
+      console.log(`Attempting to cache app shell and ${calendarUrls.length} calendar pages.`);
+
+      // まず、重要なApp Shellをキャッシュ
       await cache.addAll(APP_SHELL_FILES);
+      
+      // 次に、カレンダーのURLを一つずつキャッシュ（一つが失敗しても他は継続）
+      const calendarPromises = calendarUrls.map(url => {
+        return cache.add(url).catch(err => {
+          // ログインしていない状態では /todo/YYYY-MM-DD へのアクセスが /login にリダイレクトされ、
+          // cache.add() が失敗することがある。これは想定内の動作なので警告のみ表示。
+          console.warn(`Failed to cache calendar page ${url}. This might be due to a redirect to the login page.`, err);
+        });
+      });
+      
+      return Promise.all(calendarPromises);
     })
   );
 });
+
 
 // 古いキャッシュを削除する処理
 self.addEventListener('activate', event => {
@@ -55,50 +101,31 @@ self.addEventListener('sync', event => {
   }
 });
 
-// リクエストに応答する処理
+// リクエストに応答する処理 (Cache First戦略)
 self.addEventListener('fetch', event => {
   // GETリクエスト以外はネットワークに任せる
   if (event.request.method !== 'GET') {
     return;
   }
-
-  const url = new URL(event.request.url);
-
-  // ▼▼▼ 【修正点】scratchpadへのリクエストを特別に処理 ▼▼▼
-  // URLにクエリパラメータ(?new=trueなど)が付いていても、キャッシュから /scratchpad を探して返す
-  if (url.pathname === '/scratchpad') {
-    event.respondWith(
-      caches.open(CACHE_NAME).then(cache => {
-        return cache.match('/scratchpad').then(cachedResponse => {
-          const fetchPromise = fetch(event.request).then(networkResponse => {
-            // オンライン時は最新のものをキャッシュに保存
-            if (networkResponse && networkResponse.status === 200) {
-              cache.put('/scratchpad', networkResponse.clone());
-            }
-            return networkResponse;
-          });
-          // オフラインならキャッシュを返し、オンラインならネットワークの結果を優先
-          return cachedResponse || fetchPromise;
-        });
-      })
-    );
-    return; // このリクエストの処理はここまで
-  }
-  // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
-
-  // その他のリクエストは Stale-While-Revalidate 戦略
+  
+  // キャッシュを優先して応答
   event.respondWith(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.match(event.request).then(response => {
-        const fetchPromise = fetch(event.request).then(networkResponse => {
-          if (networkResponse && networkResponse.status === 200) {
-            cache.put(event.request, networkResponse.clone());
+    caches.match(event.request).then(cachedResponse => {
+      // キャッシュがあればそれを返す
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+      
+      // キャッシュがなければネットワークにリクエスト
+      return fetch(event.request).then(networkResponse => {
+          // 正常に取得できたら、動的にキャッシュに追加
+          if(networkResponse && networkResponse.ok) {
+              const responseToCache = networkResponse.clone();
+              caches.open(CACHE_NAME).then(cache => {
+                  cache.put(event.request, responseToCache);
+              });
           }
           return networkResponse;
-        }).catch(err => {
-            console.warn('Network request failed, probably offline:', err);
-        });
-        return response || fetchPromise;
       });
     })
   );
