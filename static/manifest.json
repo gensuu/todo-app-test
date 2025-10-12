@@ -1,7 +1,7 @@
 {
     "name": "Todo Grid App",
     "short_name": "TodoGrid",
-    "start_url": "/",
+    "start_url": "/todo",
     "display": "standalone",
     "background_color": "#212529",
     "theme_color": "#212529",

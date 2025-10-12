@@ -1,15 +1,16 @@
 // キャッシュのバージョンを更新
-const CACHE_NAME = 'todo-grid-cache-v15-corrected-path';
+// バージョン番号を上げることで、新しいサービスワーカーがインストールされやすくなります
+const CACHE_NAME = 'todo-grid-cache-v15-full-with-calendar'; // v15 に更新
 
 // オフライン処理用のスクリプトをインポート
 self.importScripts('/static/offline.js');
 
 // アプリの全機能をキャッシュ対象に追加
 const APP_SHELL_FILES = [
-  '/',
-  '/todo',
+  // '/' を削除し、'/todo' をメインの開始点として維持
+  '/todo', 
   '/add_or_edit_task',
-  '/templates', // Corrected path
+  '/manage_templates',
   '/import',
   '/settings',
   '/scratchpad',
@@ -58,9 +59,16 @@ self.addEventListener('install', event => {
       
       console.log(`Attempting to cache app shell and ${calendarUrls.length} calendar pages.`);
 
-      // まず、重要なApp Shellをキャッシュ
-      await cache.addAll(APP_SHELL_FILES);
-      
+      // まず、重要なApp Shellを一つずつキャッシュ（一つが失敗しても他は継続）
+      // cache.addAll() を個別の cache.add().catch() で置き換えることで、
+      // いずれかのファイルのキャッシュに失敗しても、他のファイルのキャッシュは試行されます。
+      const appShellPromises = APP_SHELL_FILES.map(url => {
+        return cache.add(url).catch(err => {
+          console.error(`Failed to cache app shell file ${url}:`, err);
+        });
+      });
+      await Promise.all(appShellPromises); // 全てのapp shellファイルのキャッシュ試行が完了するのを待つ
+
       // 次に、カレンダーのURLを一つずつキャッシュ（一つが失敗しても他は継続）
       const calendarPromises = calendarUrls.map(url => {
         return cache.add(url).catch(err => {
@@ -70,6 +78,7 @@ self.addEventListener('install', event => {
         });
       });
       
+      // 全てのキャッシュ試行が完了するのを待つ
       return Promise.all(calendarPromises);
     })
   );
@@ -93,15 +102,15 @@ self.addEventListener('activate', event => {
   );
 });
 
-// バックグラウンド同期のイベントリスナー
+// バックグラウンド同期のイベントリスナー (この部分は変更なし)
 self.addEventListener('sync', event => {
   if (event.tag === 'background-sync') {
       console.log('Sync event triggered!');
-      event.waitUntil(sendQueueToServer());
+      event.waitUntil(sendQueueToServer()); // sendQueueToServer() は外部で定義されていると仮定
   }
 });
 
-// リクエストに応答する処理 (Cache First戦略)
+// リクエストに応答する処理 (Cache First戦略) (この部分は変更なし)
 self.addEventListener('fetch', event => {
   // GETリクエスト以外はネットワークに任せる
   if (event.request.method !== 'GET') {
