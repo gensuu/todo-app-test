@@ -36,18 +36,13 @@
         <header class="text-center my-4">
             <h1>Todoリスト</h1>
             <p class="lead">{{ current_date.strftime('%Y年%m月%d日') }}</p>
-            {% set prev_day = current_date - timedelta(days=1) %}
-            {% set next_day = current_date + timedelta(days=1) %}
-            <div class="date-nav">
-                <a href="{{ url_for('todo_list', date_str=prev_day.strftime('%Y-%m-%d')) }}" class="btn btn-outline-secondary">&lt; 前日へ</a>
-                <a href="{{ url_for('todo_list') }}" class="btn btn-outline-secondary">今日に戻る</a>
-                <a href="{{ url_for('todo_list', date_str=next_day.strftime('%Y-%m-%d')) }}" class="btn btn-outline-secondary">翌日へ &gt;</a>
-            </div>
+            <div class="date-nav" id="date-nav-container">
+                </div>
         </header>
         
         <div class="grid-section">
             <button class="btn btn-secondary w-100 mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#collapseGrid" aria-expanded="true" aria-controls="collapseGrid">
-                🟦 タスク進捗 方眼グリッド (全 {{ total_grid_count }} マス中 <span id="completed-count-display">{{ completed_grid_count }}</span> マス完了)
+                🟦 タスク進捗 方眼グリッド (全 <span id="total-count-display">{{ total_grid_count }}</span> マス中 <span id="completed-count-display">{{ completed_grid_count }}</span> マス完了)
             </button>
             <div class="collapse show" id="collapseGrid">
                 <div class="card card-body">
@@ -101,7 +96,7 @@
                 </div>
                 {% endif %}
             {% else %}
-                <div class="card card-body text-center">
+                <div class="card card-body text-center" id="no-task-message">
                     <p class="mb-0">この日に表示するタスクはありません。</p>
                 </div>
             {% endfor %}
@@ -110,49 +105,8 @@
 
     <aside class="col-md-3 d-none d-md-block sidebar-right">
         <div class="sidebar-sticky">
-            <div class="card calendar-card mb-4">
-                <div class="card-header calendar-header">
-                    <a href="{{ url_for('todo_list', date_str=current_date.strftime('%Y-%m-%d'), cal=prev_month_str) }}" class="btn btn-sm btn-outline-secondary">&lt;</a>
-                    <span class="fw-bold">{{ cal_year }}年 {{ cal_month }}月</span>
-                    <a href="{{ url_for('todo_list', date_str=current_date.strftime('%Y-%m-%d'), cal=next_month_str) }}" class="btn btn-sm btn-outline-secondary">&gt;</a>
+            <div class="card calendar-card mb-4" id="calendar-container">
                 </div>
-                <div class="card-body p-2">
-                    <table class="calendar-table">
-                        <thead>
-                            <tr>
-                                {% for day in ['日', '月', '火', '水', '木', '金', '土'] %}
-                                    <th>{{ day }}</th>
-                                {% endfor %}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for week in calendar.monthcalendar(cal_year, cal_month) %}
-                                <tr>
-                                    {% for day in week %}
-                                        {% if day == 0 %}
-                                            <td></td>
-                                        {% else %}
-                                            {% set loop_date = date(cal_year, cal_month, day) %}
-                                            <td class="{% if loop_date == today %}today{% endif %} {% if loop_date == current_date %}current-date{% endif %}">
-                                                <a href="{{ url_for('todo_list', date_str=loop_date.strftime('%Y-%m-%d')) }}">
-                                                    <span class="calendar-day-num">{{ day }}</span>
-                                                    {% if task_counts.get(loop_date) %}
-                                                        <div class="task-dots">
-                                                            {% for i in range([task_counts.get(loop_date, 0), 8]|min) %}
-                                                                <span class="task-dot"></span>
-                                                            {% endfor %}
-                                                        </div>
-                                                    {% endif %}
-                                                </a>
-                                            </td>
-                                        {% endif %}
-                                    {% endfor %}
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
             
             <h2 class="sidebar-title">サマリー</h2>
             <div class="card summary-card text-center">
@@ -164,8 +118,8 @@
                     <hr>
                     <h5 class="card-title mt-4">統計</h5>
                     <ul class="list-unstyled">
-                        <li><strong>ストリーク</strong>: {{ summary.streak if summary else '-' }} 日</li>
-                        <li><strong>平均集中マス数</strong>: {{ summary.average_grids if summary else '-' }} マス</li>
+                        <li><strong>ストリーク</strong>: <span id="summary-streak">{{ summary.streak if summary else '-' }}</span> 日</li>
+                        <li><strong>平均集中マス数</strong>: <span id="summary-average-grids">{{ summary.average_grids if summary else '-' }}</span> マス</li>
                     </ul>
                     {% if summary %}
                     <small class="text-muted"> ({{ summary.summary_date.strftime('%Y-%m-%d') }} 時点)</small>
@@ -196,7 +150,7 @@
             </div>
             <div class="modal-body">
                 <ul class="list-group list-group-flush" id="focus-subtask-list">
-                    </ul>
+                </ul>
             </div>
         </div>
     </div>
@@ -204,102 +158,137 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='calendar.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    // --- サーバーから渡されたタスクデータをJS変数に格納し、ローカルストレージを初期化 ---
-    const tasksFromServer = {{ master_tasks_for_js | tojson | safe }};
-    
-    // この関数は offline.js にあると仮定しますが、ここでは定義されていないため、
-    // ひとまずグローバルスコープに関数を定義します。
-    // 本来は offline.js 側で処理するべきです。
-    function initializeLocalTasks(tasks) {
-        // この関数は、サーバーからのタスクでローカルの状態を初期化または更新します。
-        // ここでは単純化のため、何もしないか、コンソールに出力するだけにします。
-        console.log("Initializing tasks from server:", tasks);
-    }
 
-    initializeLocalTasks(tasksFromServer);
-    
-    const taskListContainer = document.getElementById('task-list-container');
+    const completedCountDisplay = document.getElementById('completed-count-display');
+    const totalCountDisplay = document.getElementById('total-count-display');
+    const gridContainer = document.querySelector('.new-grid-container');
+    const gridCells = gridContainer ? Array.from(gridContainer.children) : [];
+    const summaryStreak = document.getElementById('summary-streak');
+    const summaryAverageGrids = document.getElementById('summary-average-grids');
+    const progressCircle = document.querySelector('.progress-circle');
+    const progressText = document.querySelector('.progress-text');
 
-    // --- タスク完了のイベントリスナーを設定する関数 ---
-    function setupEventListeners() {
-        document.querySelectorAll('.complete-toggle').forEach(toggle => {
-            toggle.addEventListener('click', async (e) => {
-                const subtaskLi = e.target.closest('li');
-                const subtaskId = subtaskLi.dataset.subtaskId;
-                
-                // UIを即時更新 (Optimistic Update)
-                subtaskLi.classList.toggle('completed');
-                e.target.classList.toggle('bi-check-square-fill');
-                e.target.classList.toggle('bi-square');
-
-                // APIを叩いてサーバーのデータを更新
-                try {
-                    const response = await fetch(`/api/complete_subtask/${subtaskId}`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        }
-                    });
-                    const data = await response.json();
-                    if (!data.success) {
-                        // 失敗したらUIを元に戻す
-                        console.error('Failed to update task status on server.');
-                        subtaskLi.classList.toggle('completed');
-                        e.target.classList.toggle('bi-check-square-fill');
-                        e.target.classList.toggle('bi-square');
-                    } else {
-                        // 成功したらページをリロードしてグリッドなどを更新
-                        location.reload();
-                    }
-                } catch (error) {
-                    console.error('Error:', error);
-                    // エラー発生時もUIを元に戻す
-                    subtaskLi.classList.toggle('completed');
-                    e.target.classList.toggle('bi-check-square-fill');
-                    e.target.classList.toggle('bi-square');
-                }
-            });
-        });
-
-        // モーダル関連のイベントリスナーもここに設定
-        const taskFocusModal = document.getElementById('taskFocusModal');
-        if (taskFocusModal) {
-            taskFocusModal.addEventListener('show.bs.modal', event => {
-                const triggerElement = event.relatedTarget;
-                const taskTitle = triggerElement.getAttribute('data-task-title');
-                try {
-                    const subtasks = JSON.parse(triggerElement.getAttribute('data-task-subtasks'));
-                    const modalTitle = taskFocusModal.querySelector('.modal-title');
-                    const modalBodyList = taskFocusModal.querySelector('#focus-subtask-list');
-                    
-                    modalTitle.textContent = taskTitle;
-                    modalBodyList.innerHTML = '';
-
-                    if (subtasks && subtasks.length > 0) {
-                        subtasks.forEach(subtask => {
-                             const li = document.createElement('li');
-                            li.className = `list-group-item sub-task d-flex align-items-center ${subtask.is_completed ? 'completed' : ''}`;
-                            li.dataset.subtaskId = subtask.id;
-                            const iconClass = subtask.is_completed ? 'bi-check-square-fill' : 'bi-square';
-                            li.innerHTML = `
-                                <i class="bi ${iconClass}" style="margin-right: 10px;"></i>
-                                <span class="flex-grow-1">${subtask.content} (${subtask.grid_count}マス)</span>`;
-                            modalBodyList.appendChild(li);
-                        });
-                    } else {
-                         modalBodyList.innerHTML = '<li class="list-group-item">サブタスクはありません。</li>';
-                    }
-                } catch(e) {
-                     console.error("Failed to parse subtasks for modal:", e);
-                }
+    function updateUI(data) {
+        if (completedCountDisplay) completedCountDisplay.textContent = data.completed_grid_count;
+        if (totalCountDisplay) totalCountDisplay.textContent = data.total_grid_count;
+        if (gridCells.length > 0) {
+            gridCells.forEach((cell, index) => {
+                cell.classList.toggle('completed', index < data.completed_grid_count);
+                cell.classList.toggle('task-area', index < data.total_grid_count);
             });
         }
+        if (summaryStreak) summaryStreak.textContent = data.summary.streak;
+        if (summaryAverageGrids) summaryAverageGrids.textContent = data.summary.average_grids;
+        if (progressCircle && progressText) {
+            const percentage = data.total_grid_count > 0 ? (data.completed_grid_count / data.total_grid_count * 100) : 0;
+            progressCircle.style.setProperty('--progress', `${percentage}%`); 
+            progressText.textContent = `${Math.round(percentage)}%`;
+        }
+    }
+    
+    if (progressCircle && progressText) {
+        const initialPercentage = parseFloat(progressCircle.dataset.progress || 0);
+        progressText.textContent = `${Math.round(initialPercentage)}%`;
+        progressCircle.style.setProperty('--progress', `${initialPercentage}%`);
     }
 
-    // --- 初期描画時にイベントリスナーを設定 ---
-    setupEventListeners();
+    document.querySelectorAll('.complete-toggle').forEach(toggle => {
+        toggle.addEventListener('click', async (e) => {
+            const subtaskLi = e.target.closest('li');
+            const subtaskId = subtaskLi.dataset.subtaskId;
+            
+            subtaskLi.classList.toggle('completed');
+            e.target.classList.toggle('bi-check-square-fill');
+            e.target.classList.toggle('bi-square');
+
+            try {
+                const response = await fetch(`/api/complete_subtask/${subtaskId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+                if (!data.success) throw new Error(data.error || "サーバーエラー");
+                updateUI(data);
+                const masterCard = subtaskLi.closest('.master-task-card');
+                if (masterCard) {
+                    const allCompleted = !masterCard.querySelector('.sub-task:not(.completed)');
+                    masterCard.classList.toggle('all-completed', allCompleted);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('更新に失敗しました。ページをリロードします。');
+                location.reload();
+            }
+        });
+    });
+
+    const taskFocusModal = document.getElementById('taskFocusModal');
+    if (taskFocusModal) {
+        taskFocusModal.addEventListener('show.bs.modal', event => {
+            const triggerElement = event.relatedTarget;
+            const taskTitle = triggerElement.getAttribute('data-task-title');
+            try {
+                const subtasks = JSON.parse(triggerElement.getAttribute('data-task-subtasks'));
+                const modalTitle = taskFocusModal.querySelector('.modal-title');
+                const modalBodyList = taskFocusModal.querySelector('#focus-subtask-list');
+                modalTitle.textContent = taskTitle;
+                modalBodyList.innerHTML = '';
+                if (subtasks && subtasks.length > 0) {
+                    subtasks.forEach(subtask => {
+                        const li = document.createElement('li');
+                        li.className = `list-group-item sub-task d-flex align-items-center ${subtask.is_completed ? 'completed' : ''}`;
+                        li.dataset.subtaskId = subtask.id;
+                        const iconClass = subtask.is_completed ? 'bi-check-square-fill' : 'bi-square';
+                        li.innerHTML = `
+                            <i class="bi ${iconClass}" style="margin-right: 10px;"></i>
+                            <span class="flex-grow-1">${subtask.content} (${subtask.grid_count}マス)</span>`;
+                        modalBodyList.appendChild(li);
+                    });
+                } else {
+                    modalBodyList.innerHTML = '<li class="list-group-item">サブタスクはありません。</li>';
+                }
+            } catch(e) {
+                console.error("Failed to parse subtasks for modal:", e);
+            }
+        });
+    }
+    
+    // --- カレンダーと日付ナビゲーションの生成 ---
+    const calendarContainer = document.getElementById('calendar-container');
+    const dateNavContainer = document.getElementById('date-nav-container');
+    const currentDate = new Date("{{ current_date.strftime('%Y-%m-%d') }}T00:00:00");
+    const today = new Date("{{ today.strftime('%Y-%m-%d') }}T00:00:00");
+    // --- ▼▼▼ 修正点: サーバーからのタスク数をJavaScript変数に格納 ---
+    const taskCounts = {{ task_counts | tojson | safe }};
+    let displayedMonthDate = new Date(currentDate);
+
+    function renderCalendar() {
+        // --- ▼▼▼ 修正点: generateCalendarにtaskCountsを渡す ---
+        calendarContainer.innerHTML = generateCalendar(displayedMonthDate, currentDate, today, taskCounts);
+        document.getElementById('prev-month-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            displayedMonthDate.setMonth(displayedMonthDate.getMonth() - 1);
+            // 月を移動する際は、サーバーに新しい月のタスク数を問い合わせる必要があるが、
+            // 今回はシンプル化のため、初回読み込み時の月のデータのみで描画する。
+            // 本格的な実装では、ここでAjaxリクエストを飛ばすことになる。
+            renderCalendar();
+        });
+        document.getElementById('next-month-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            displayedMonthDate.setMonth(displayedMonthDate.getMonth() + 1);
+            renderCalendar();
+        });
+    }
+
+    if (calendarContainer) {
+        renderCalendar();
+    }
+    if (dateNavContainer) {
+        dateNavContainer.innerHTML = generateDateNav(currentDate);
+    }
 });
 </script>
 {% endblock %}

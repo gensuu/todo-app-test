@@ -41,15 +41,12 @@ if 'sqlite' in db_url:
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# ▼▼▼ データベース接続の安定性を向上させるための設定を追加 ▼▼▼
-# これにより、サーバーレス環境でのアイドルタイムアウトによる接続エラーを防ぎます。
 engine_options = {
-    "pool_pre_ping": True, # 接続を使用する前に、接続が有効かテストする
-    "pool_recycle": 300,   # 300秒(5分)ごとに接続をリサイクルする
+    "pool_pre_ping": True,
+    "pool_recycle": 300,
 }
 
 db = SQLAlchemy(app, engine_options=engine_options)
-# ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
 class DateAsString(TypeDecorator):
     impl = String
@@ -116,7 +113,7 @@ def load_user(user_id):
 @app.before_request
 def require_password_change():
     if current_user.is_authenticated and current_user.password_reset_required:
-        allowed_endpoints = ['settings', 'logout', 'static', 'api_sync'] # syncエンドポイントを許可
+        allowed_endpoints = ['settings', 'logout', 'static']
         if request.endpoint not in allowed_endpoints:
             flash('セキュリティのため、新しいパスワードを設定してください。', 'warning')
             return redirect(url_for('settings'))
@@ -267,13 +264,9 @@ def settings():
     sa_email = os.environ.get('SERVICE_ACCOUNT_EMAIL', '（管理者が設定してください）')
     return render_template('settings.html', sa_email=sa_email, days_until_deletion=days_until_deletion, force_password_change=current_user.password_reset_required)
 
-@app.route('/sw.js')
-def service_worker():
-    return send_file('sw.js', mimetype='application/javascript')
-    
-@app.route('/static/offline.js')
-def offline_js():
-    return send_file('static/offline.js', mimetype='application/javascript')
+@app.route('/static/calendar.js')
+def calendar_js():
+    return send_file('static/calendar.js', mimetype='application/javascript')
 
 # --- 6. Todoアプリ本体のルート ---
 @app.route('/todo')
@@ -288,32 +281,29 @@ def todo_list(date_str=None):
             target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
         except ValueError:
             return redirect(url_for('todo_list'))
-            
-    calendar.setfirstweekday(calendar.SUNDAY)
-            
-    cal_date_str = request.args.get('cal')
-    if cal_date_str:
-        try:
-            cal_view_date = datetime.strptime(cal_date_str, '%Y-%m').date()
-        except ValueError:
-            cal_view_date = target_date
-    else:
-        cal_view_date = target_date
-    cal_year, cal_month = cal_view_date.year, cal_view_date.month
-    first_day_of_month = date(cal_year, cal_month, 1)
+    
+    # --- ▼▼▼ 修正点: タスク数を計算するロジックを復活 ▼▼▼ ---
+    first_day_of_month = target_date.replace(day=1)
     next_month_first_day = (first_day_of_month + timedelta(days=32)).replace(day=1)
-    prev_month_first_day = (first_day_of_month - timedelta(days=1)).replace(day=1)
+    
     uncompleted_tasks_in_month = MasterTask.query.filter(
         MasterTask.user_id == current_user.id,
         MasterTask.due_date >= first_day_of_month,
         MasterTask.due_date < next_month_first_day,
         MasterTask.subtasks.any(SubTask.is_completed == False)
     ).all()
+    
     task_counts = {}
     for task in uncompleted_tasks_in_month:
-        count = task_counts.get(task.due_date, 0)
-        task_counts[task.due_date] = count + 1
-    
+        # 日付オブジェクトをキーにする
+        due_date_key = task.due_date
+        count = task_counts.get(due_date_key, 0)
+        task_counts[due_date_key] = count + 1
+
+    # JavaScriptで扱いやすいように、キーを文字列 'YYYY-MM-DD' に変換
+    task_counts_for_js = {d.isoformat(): c for d, c in task_counts.items()}
+    # --- ▲▲▲ 修正ここまで ▲▲▲ ---
+
     master_tasks_query = MasterTask.query.options(
         selectinload(MasterTask.subtasks)
     ).filter(
@@ -323,14 +313,10 @@ def todo_list(date_str=None):
     master_tasks_result = master_tasks_query.order_by(MasterTask.is_urgent.desc(), MasterTask.due_date.asc(), MasterTask.id.asc()).all()
     
     master_tasks_for_template = []
-    master_tasks_for_js = []
-
     for mt in master_tasks_result:
         visible_subtasks = [st for st in mt.subtasks if not st.is_completed or st.completion_date == target_date]
         if not visible_subtasks:
             continue
-
-        # 1. テンプレート描画用に、オブジェクトに必要な属性を追加
         mt.visible_subtasks = visible_subtasks
         subtasks_as_dicts = [
             {"id": st.id, "content": st.content, "is_completed": st.is_completed, "grid_count": st.grid_count} 
@@ -340,18 +326,6 @@ def todo_list(date_str=None):
         mt.all_completed = all(st.is_completed for st in visible_subtasks)
         master_tasks_for_template.append(mt)
 
-        # 2. JavaScript用に、シリアライズ可能な辞書を作成
-        master_tasks_for_js.append({
-            "id": mt.id,
-            "title": mt.title,
-            "due_date": mt.due_date.isoformat(),
-            "is_urgent": mt.is_urgent,
-            "visible_subtasks_json": mt.visible_subtasks_json,
-            "all_completed": mt.all_completed,
-            "visible_subtasks": subtasks_as_dicts
-        })
-
-    # 変数名を更新
     master_tasks = master_tasks_for_template
     
     all_subtasks_for_day = [st for mt in master_tasks for st in mt.visible_subtasks]
@@ -363,14 +337,16 @@ def todo_list(date_str=None):
     latest_summary = DailySummary.query.filter(DailySummary.user_id == current_user.id).order_by(DailySummary.summary_date.desc()).first()
     
     return render_template(
-        'index.html', master_tasks=master_tasks, current_date=target_date, date=date, 
-        timedelta=timedelta, total_grid_count=total_grid_count, completed_grid_count=completed_grid_count, 
-        GRID_COLS=GRID_COLS, grid_rows=grid_rows, summary=latest_summary,
-        calendar=calendar, cal_year=cal_year, cal_month=cal_month, task_counts=task_counts,
-        prev_month_str=prev_month_first_day.strftime('%Y-%m'), 
-        next_month_str=next_month_first_day.strftime('%Y-%m'),
+        'index.html', 
+        master_tasks=master_tasks, 
+        current_date=target_date, 
         today=get_jst_today(),
-        master_tasks_for_js=master_tasks_for_js # JS用の変数を追加
+        total_grid_count=total_grid_count, 
+        completed_grid_count=completed_grid_count, 
+        GRID_COLS=GRID_COLS, 
+        grid_rows=grid_rows, 
+        summary=latest_summary,
+        task_counts=task_counts_for_js # --- ▼▼▼ 修正点: テンプレートに渡す ---
     )
     
 @app.route('/add_or_edit_task', methods=['GET', 'POST'])
@@ -426,7 +402,7 @@ def add_or_edit_task(master_id=None):
     templates = TaskTemplate.query.filter_by(user_id=current_user.id).all()
     templates_data = {t.id: {"title": t.title, "subtasks": [{"content": s.content, "grid_count": s.grid_count} for s in t.subtask_templates]} for t in templates}
     subtasks_for_template = [{"content": sub.content, "grid_count": sub.grid_count} for sub in (master_task.subtasks if master_task else [])]
-    return render_template('edit_task.html', master_task=master_task, existing_subtasks=subtasks_for_template, date=date, default_date=default_date, templates=templates, templates_data=templates_data)
+    return render_template('edit_task.html', master_task=master_task, existing_subtasks=subtasks_for_template, default_date=default_date, templates=templates, templates_data=templates_data)
 
 @app.route('/api/complete_subtask/<int:subtask_id>', methods=['POST'])
 @login_required
@@ -434,68 +410,37 @@ def complete_subtask_api(subtask_id):
     subtask = SubTask.query.get_or_404(subtask_id)
     if subtask.master_task.user_id != current_user.id:
         return jsonify({'success': False, 'error': 'Permission denied'}), 403
+
     subtask.is_completed = not subtask.is_completed
     subtask.completion_date = get_jst_today() if subtask.is_completed else None
     db.session.commit()
+
     update_summary(current_user.id)
-    return jsonify({'success': True, 'is_completed': subtask.is_completed})
 
-# ▼▼▼ オフライン同期用のAPIエンドポイント ▼▼▼
-@app.route('/api/sync', methods=['POST'])
-@login_required
-def api_sync():
-    data = request.json
     today = get_jst_today()
+    master_tasks_today = MasterTask.query.filter(
+        MasterTask.user_id == current_user.id,
+        MasterTask.subtasks.any(or_(SubTask.is_completed == False, SubTask.completion_date == today))
+    ).all()
     
-    # --- 新しいタスクの同期 ---
-    new_tasks_data = data.get('new_tasks', [])
-    for task_data in new_tasks_data:
-        try:
-            due_date = datetime.strptime(task_data['due_date'], '%Y-%m-%d').date()
-            master_task = MasterTask(
-                title=task_data['title'],
-                due_date=due_date,
-                is_urgent=task_data['is_urgent'],
-                user_id=current_user.id
-            )
-            db.session.add(master_task)
-            db.session.flush() # master_task.id を確定させる
-            for subtask_data in task_data['subtasks']:
-                subtask = SubTask(
-                    master_id=master_task.id,
-                    content=subtask_data['content'],
-                    grid_count=subtask_data['grid_count']
-                )
-                db.session.add(subtask)
-        except Exception as e:
-            print(f"Error syncing new task: {e}") # エラーログ
-            db.session.rollback()
+    all_subtasks_for_day = [st for mt in master_tasks_today for st in mt.subtasks if not st.is_completed or st.completion_date == today]
+    total_grid_count = sum(sub.grid_count for sub in all_subtasks_for_day)
+    completed_grid_count = sum(sub.grid_count for sub in all_subtasks_for_day if sub.is_completed)
 
-    # --- Scratchpadタスクの同期 ---
-    scratchpad_tasks = data.get('scratchpad_tasks', [])
-    if scratchpad_tasks:
-        try:
-            master_title = f"{today.strftime('%Y-%m-%d')}のクイックタスク"
-            master_task = MasterTask.query.filter_by(user_id=current_user.id, title=master_title, due_date=today).first()
-            if not master_task:
-                master_task = MasterTask(title=master_title, due_date=today, user_id=current_user.id)
-                db.session.add(master_task)
-                db.session.flush()
-            for task_content in scratchpad_tasks:
-                db.session.add(SubTask(master_id=master_task.id, content=task_content, grid_count=1))
-        except Exception as e:
-            print(f"Error syncing scratchpad tasks: {e}") # エラーログ
-            db.session.rollback()
-            
-    try:
-        db.session.commit()
-    except Exception as e:
-        print(f"Final commit failed during sync: {e}")
-        db.session.rollback()
-        return jsonify({'success': False, 'message': 'データベースへの保存中にエラーが発生しました。'}), 500
+    latest_summary = DailySummary.query.filter(DailySummary.user_id == current_user.id).order_by(DailySummary.summary_date.desc()).first()
 
-    return jsonify({'success': True})
-# ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+    summary_data = {
+        'streak': latest_summary.streak if latest_summary else 0,
+        'average_grids': latest_summary.average_grids if latest_summary else 0.0
+    }
+
+    return jsonify({
+        'success': True,
+        'is_completed': subtask.is_completed,
+        'total_grid_count': total_grid_count,
+        'completed_grid_count': completed_grid_count,
+        'summary': summary_data
+    })
 
 @app.route('/import', methods=['GET', 'POST'])
 @login_required
@@ -590,7 +535,6 @@ def export_scratchpad():
     for task_content in tasks_to_add:
         db.session.add(SubTask(master_id=master_task.id, content=task_content, grid_count=1))
     db.session.commit()
-    flash(f"{len(tasks_to_add)}件のクイックタスクをタスク一覧に追加しました。")
     return jsonify({'success': True})
 
 def get_gspread_client():
@@ -670,7 +614,6 @@ def delete_user(user_id):
     flash(f"ユーザー「{user_to_delete.username}」を削除しました。")
     return redirect(url_for('admin_panel'))
 
-# ▼▼▼ パスワードリセット機能のルートを新しく追加 ▼▼▼
 @app.route('/admin/reset_password/<int:user_id>', methods=['POST'])
 @login_required
 def reset_password(user_id):
@@ -683,19 +626,14 @@ def reset_password(user_id):
         flash("指定されたユーザーが見つかりません。")
         return redirect(url_for('admin_panel'))
 
-    # 新しい一時パスワードを生成 (8文字のランダムな文字列)
     new_password = secrets.token_hex(8)
     
-    # 新しいパスワードをハッシュ化してデータベースを更新
     user_to_reset.password_hash = generate_password_hash(new_password, method='pbkdf2:sha256')
-    # ▼▼▼ リセット時にフラグを立てる ▼▼▼
     user_to_reset.password_reset_required = True
     db.session.commit()
 
-    # 管理者に新しいパスワードを通知
     flash(f"ユーザー「{user_to_reset.username}」の新しい一時パスワードは「{new_password}」です。コピーしてユーザーに伝えてください。", 'success')
     return redirect(url_for('admin_panel'))
-# ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
 @app.route('/admin/export_user_data/<int:user_id>', methods=['POST'])
 @login_required

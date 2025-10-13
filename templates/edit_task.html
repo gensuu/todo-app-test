@@ -73,24 +73,22 @@
         const container = document.getElementById('subtasks-container');
         const addBtn = document.getElementById('add-subtask-btn');
         const maxSubtasks = 20;
-        
-        const templatesData = {{ templates_data | safe }};
+        const templatesData = {{ templates_data | tojson | safe }};
         const existingSubtasks = {{ existing_subtasks | tojson | safe }};
-
         let subtaskCounter = 0;
 
         const createSubtaskRow = (task = { content: '', grid_count: 1 }) => {
             if (subtaskCounter >= maxSubtasks) return;
-            subtaskCounter++;
+            const newIndex = subtaskCounter + 1;
             const row = document.createElement('div');
             row.classList.add('row', 'g-2', 'mb-2', 'align-items-center', 'subtask-row');
             row.innerHTML = `
                 <div class="col">
-                    <input type="text" class="form-control" name="sub_content_${subtaskCounter}" placeholder="サブタスクの内容" value="${task.content}" required>
+                    <input type="text" class="form-control" name="sub_content_${newIndex}" placeholder="サブタスクの内容" value="${task.content}" required>
                 </div>
                 <div class="col-4 col-md-3">
                     <div class="input-group">
-                        <input type="number" class="form-control" name="grid_count_${subtaskCounter}" min="1" value="${task.grid_count}" required>
+                        <input type="number" class="form-control" name="grid_count_${newIndex}" min="1" value="${task.grid_count}" required>
                         <span class="input-group-text">マス</span>
                     </div>
                 </div>
@@ -99,6 +97,7 @@
                 </div>
             `;
             container.appendChild(row);
+            subtaskCounter = newIndex;
         };
         
         const populateSubtasks = (tasks) => {
@@ -122,7 +121,6 @@
             templateSelector.addEventListener('change', (e) => {
                 const templateId = e.target.value;
                 const masterTitleInput = document.getElementById('master_title');
-                
                 if (templateId && templatesData[templateId]) {
                     const selectedTemplate = templatesData[templateId];
                     masterTitleInput.value = selectedTemplate.title;
@@ -144,55 +142,18 @@
         const saveButton = document.getElementById('save-task-btn');
         const form = document.getElementById('task-form');
 
-        saveButton.addEventListener('click', async () => {
-            // 編集モードはオンライン時のみ（簡略化のため）
-            {% if master_task %}
-                if (!navigator.onLine) {
-                    alert('タスクの編集はオンラインである必要があります。');
-                    return;
-                }
-                form.action = "{{ url_for('add_or_edit_task', master_id=master_task.id) }}";
+        saveButton.addEventListener('click', () => {
+            // バリデーション
+            if (form.reportValidity()) {
+                // 編集か新規追加かでactionを決定
+                {% if master_task %}
+                    form.action = "{{ url_for('add_or_edit_task', master_id=master_task.id) }}";
+                {% else %}
+                    form.action = "{{ url_for('add_or_edit_task') }}";
+                {% endif %}
+                // フォームをサーバーに送信
                 form.submit();
-                return;
-            {% endif %}
-
-            // フォームの入力内容をオブジェクトとして収集
-            const subtasks = [];
-            document.querySelectorAll('.subtask-row').forEach((row) => {
-                const contentInput = row.querySelector(`input[name^="sub_content_"]`);
-                const gridCountInput = row.querySelector(`input[name^="grid_count_"]`);
-                if (contentInput && contentInput.value.trim() !== '' && gridCountInput && gridCountInput.value) {
-                    subtasks.push({
-                        content: contentInput.value.trim(),
-                        grid_count: parseInt(gridCountInput.value, 10)
-                    });
-                }
-            });
-
-            if (document.getElementById('master_title').value.trim() === '' || subtasks.length === 0) {
-                alert('親タスクのタイトルと、最低1つのサブタスクを入力してください。');
-                return;
             }
-
-            const taskData = {
-                title: document.getElementById('master_title').value.trim(),
-                due_date: document.getElementById('due_date').value,
-                is_urgent: document.getElementById('is_urgent').checked,
-                subtasks: subtasks
-            };
-
-            // UIの即時反映のためにローカルストレージを更新
-            addLocalTask(taskData);
-            
-            // 同期キューに操作を追加
-            await addToSyncQueue({
-                type: 'ADD_TASK',
-                payload: taskData
-            });
-            
-            // ユーザーにフィードバックしてリダイレクト
-            alert('タスクを追加しました。オフラインの場合、後で自動的に同期されます。');
-            window.location.href = "{{ url_for('todo_list') }}";
         });
     });
 </script>

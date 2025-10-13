@@ -5,7 +5,6 @@
 <div class="row justify-content-center auth-form">
     <div class="col-md-8 col-lg-6">
 
-        {# ▼▼▼ パスワード変更が強制されている場合に警告を表示 ▼▼▼ #}
         {% if force_password_change %}
         <div class="alert alert-danger mt-4" role="alert">
             <h4 class="alert-heading"><i class="bi bi-exclamation-triangle-fill"></i> セキュリティ警告</h4>
@@ -15,9 +14,7 @@
         </div>
         {% endif %}
 
-        {# ▼▼▼ パスワード変更が強制されていない場合のみ、他の設定項目を表示 ▼▼▼ #}
         {% if not force_password_change %}
-        <!-- Spreadsheet Settings Card -->
         <div class="card mb-4">
             <div class="card-body">
                 <h2 class="card-title text-center mb-4">スプレッドシート設定</h2>
@@ -44,7 +41,6 @@
         </div>
         {% endif %}
 
-        <!-- Password Change Card (常に表示) -->
         <div class="card mb-4">
             <div class="card-body">
                 <h2 class="card-title text-center mb-4">パスワード変更</h2>
@@ -83,9 +79,7 @@
             </div>
         </div>
 
-        {# ▼▼▼ パスワード変更が強制されていない場合のみ、他の設定項目を表示 ▼▼▼ #}
         {% if not force_password_change %}
-        <!-- App Install Card -->
         <div class="card mb-4">
             <div class="card-body">
                 <h2 class="card-title text-center mb-4">アプリケーション</h2>
@@ -121,6 +115,7 @@
 
 {% block scripts %}
 <script>
+    // パスワード表示の切り替え機能
     function setupPasswordToggle(inputId, buttonId) {
         const toggleButton = document.getElementById(buttonId);
         const passwordInput = document.getElementById(inputId);
