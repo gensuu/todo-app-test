@@ -195,14 +195,21 @@ document.addEventListener('DOMContentLoaded', () => {
         progressCircle.style.setProperty('--progress', `${initialPercentage}%`);
     }
 
+    // --- ▼▼▼ 修正点: タスク完了処理を修正 ▼▼▼ ---
     document.querySelectorAll('.complete-toggle').forEach(toggle => {
         toggle.addEventListener('click', async (e) => {
+            // イベントの伝播を止める
+            e.preventDefault(); 
+            e.stopPropagation();
+
             const subtaskLi = e.target.closest('li');
             const subtaskId = subtaskLi.dataset.subtaskId;
             
-            subtaskLi.classList.toggle('completed');
-            e.target.classList.toggle('bi-check-square-fill');
-            e.target.classList.toggle('bi-square');
+            // UIを楽観的に更新
+            const isNowCompleted = !subtaskLi.classList.contains('completed');
+            subtaskLi.classList.toggle('completed', isNowCompleted);
+            e.target.classList.toggle('bi-check-square-fill', isNowCompleted);
+            e.target.classList.toggle('bi-square', !isNowCompleted);
 
             try {
                 const response = await fetch(`/api/complete_subtask/${subtaskId}`, {
@@ -210,17 +217,30 @@ document.addEventListener('DOMContentLoaded', () => {
                     headers: { 'Content-Type': 'application/json' }
                 });
                 const data = await response.json();
-                if (!data.success) throw new Error(data.error || "サーバーエラー");
+
+                if (!data.success) {
+                    throw new Error(data.error || "サーバーエラー");
+                }
+                
+                // APIからの最新データでUI全体を更新
                 updateUI(data);
+
+                // 親カードのスタイルを更新
                 const masterCard = subtaskLi.closest('.master-task-card');
                 if (masterCard) {
-                    const allCompleted = !masterCard.querySelector('.sub-task:not(.completed)');
+                    const allSubtasks = masterCard.querySelectorAll('.sub-task');
+                    const completedSubtasks = masterCard.querySelectorAll('.sub-task.completed');
+                    const allCompleted = allSubtasks.length === completedSubtasks.length;
                     masterCard.classList.toggle('all-completed', allCompleted);
                 }
+
             } catch (error) {
                 console.error('Error:', error);
-                alert('更新に失敗しました。ページをリロードします。');
-                location.reload();
+                // 失敗した場合はUIを元に戻す
+                alert('更新に失敗しました。');
+                subtaskLi.classList.toggle('completed', !isNowCompleted);
+                e.target.classList.toggle('bi-check-square-fill', !isNowCompleted);
+                e.target.classList.toggle('bi-square', isNowCompleted);
             }
         });
     });
@@ -256,24 +276,18 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
-    // --- カレンダーと日付ナビゲーションの生成 ---
     const calendarContainer = document.getElementById('calendar-container');
     const dateNavContainer = document.getElementById('date-nav-container');
     const currentDate = new Date("{{ current_date.strftime('%Y-%m-%d') }}T00:00:00");
     const today = new Date("{{ today.strftime('%Y-%m-%d') }}T00:00:00");
-    // --- ▼▼▼ 修正点: サーバーからのタスク数をJavaScript変数に格納 ---
     const taskCounts = {{ task_counts | tojson | safe }};
     let displayedMonthDate = new Date(currentDate);
 
     function renderCalendar() {
-        // --- ▼▼▼ 修正点: generateCalendarにtaskCountsを渡す ---
         calendarContainer.innerHTML = generateCalendar(displayedMonthDate, currentDate, today, taskCounts);
         document.getElementById('prev-month-btn').addEventListener('click', (e) => {
             e.preventDefault();
             displayedMonthDate.setMonth(displayedMonthDate.getMonth() - 1);
-            // 月を移動する際は、サーバーに新しい月のタスク数を問い合わせる必要があるが、
-            // 今回はシンプル化のため、初回読み込み時の月のデータのみで描画する。
-            // 本格的な実装では、ここでAjaxリクエストを飛ばすことになる。
             renderCalendar();
         });
         document.getElementById('next-month-btn').addEventListener('click', (e) => {

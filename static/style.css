@@ -152,6 +152,7 @@ body {
     color: #ffc107;
 }
 
+/* --- ▼▼▼ 修正点: all-completedのスタイルを元に戻す ▼▼▼ --- */
 .master-task-card.all-completed {
     opacity: 0.3;
     transition: opacity 0.3s ease-in-out;

@@ -218,7 +218,7 @@
                 if (data.success) {
                     localStorage.removeItem(STORAGE_KEY);
                     localStorage.removeItem(PREVIOUS_STORAGE_KEY);
-                    alert('タスクを一覧に書き出しました。');
+                    // ▼▼▼ 修正点: alertを削除 ▼▼▼
                     window.location.href = "{{ url_for('todo_list') }}";
                 } else {
                     alert('書き出しに失敗しました。');
@@ -229,12 +229,11 @@
             }
         };
         
-        // --- ▼▼▼ 復活 ▼▼▼ ---
         const restoreTasks = () => {
             const previousTasksJSON = localStorage.getItem(PREVIOUS_STORAGE_KEY);
             if (previousTasksJSON) {
                 const previousTasks = JSON.parse(previousTasksJSON);
-                list.innerHTML = ''; // 現在のリストをクリアして復元
+                list.innerHTML = '';
                 previousTasks.forEach(task => createTaskElement(task.text, task.completed));
                 localStorage.removeItem(PREVIOUS_STORAGE_KEY);
                 restoreButton.style.display = 'none';
@@ -243,22 +242,19 @@
             }
         };
 
-        // --- ▼▼▼ 復活 ▼▼▼ ---
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.has('new')) {
             const currentTasksJSON = localStorage.getItem(STORAGE_KEY);
             if (currentTasksJSON) {
                 const currentTasks = JSON.parse(currentTasksJSON);
                 if (currentTasks.length > 0) {
-                    // 空でない場合のみバックアップ
                     localStorage.setItem(PREVIOUS_STORAGE_KEY, currentTasksJSON);
                 }
             }
-            localStorage.removeItem(STORAGE_KEY); // 新しいリストを開始するためにクリア
+            localStorage.removeItem(STORAGE_KEY);
             window.history.replaceState({}, document.title, window.location.pathname);
         }
 
-        // --- ▼▼▼ 復活 ▼▼▼ ---
         if (localStorage.getItem(PREVIOUS_STORAGE_KEY)) {
             restoreButton.style.display = 'flex';
         }
