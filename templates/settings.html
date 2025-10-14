@@ -115,7 +115,6 @@
 
 {% block scripts %}
 <script>
-    // パスワード表示の切り替え機能
     function setupPasswordToggle(inputId, buttonId) {
         const toggleButton = document.getElementById(buttonId);
         const passwordInput = document.getElementById(inputId);
@@ -124,7 +123,6 @@
         toggleButton.addEventListener('click', function () {
             const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
             passwordInput.setAttribute('type', type);
-            
             const icon = this.querySelector('i');
             icon.classList.toggle('bi-eye-fill');
             icon.classList.toggle('bi-eye-slash-fill');

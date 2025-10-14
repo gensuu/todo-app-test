@@ -22,24 +22,6 @@ body {
 }
 
 /* --- Header & Layout --- */
-.app-header {
-    padding: 10px 20px;
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    border-bottom: 1px solid var(--dark-border);
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 1030;
-    background-color: var(--dark-bg);
-}
-
-.user-info {
-    margin-right: 15px;
-}
-
 .main-container {
     padding-top: 20px;
 }
@@ -74,9 +56,8 @@ body {
     padding-left: 0.75rem;
 }
 
-/* 「今からTodo」ボタンのスタイル */
 .sidebar-left .scratchpad-btn {
-    background-color: #6c757d; /* 明るめの灰色 */
+    background-color: #6c757d;
     color: white;
     border-color: #6c757d;
 }
@@ -95,6 +76,19 @@ body {
 /* --- Header inside Main Content --- */
 .date-nav .btn {
     margin: 0 5px;
+}
+
+/* --- Offline Toggle Switch Styles --- */
+.offline-switch-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 15px;
+    padding: 8px;
+    background-color: var(--dark-card-bg);
+    border-radius: 0.5rem;
+    border: 1px solid var(--dark-border);
 }
 
 /* --- Grid Section --- */
@@ -152,7 +146,6 @@ body {
     color: #ffc107;
 }
 
-/* --- ▼▼▼ 修正点: all-completedのスタイルを元に戻す ▼▼▼ --- */
 .master-task-card.all-completed {
     opacity: 0.3;
     transition: opacity 0.3s ease-in-out;
@@ -360,23 +353,5 @@ body {
         position: static;
         height: auto;
     }
-    .app-header {
-        position: fixed;
-    }
 }
 
-/* --- Loading Overlay --- */
-.loading-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(33, 37, 41, 0.85); /* 半透明のダーク背景 */
-    display: none; /* 初期状態では非表示 */
-    justify-content: center;
-    align-items: center;
-    flex-direction: column;
-    z-index: 9999;
-    backdrop-filter: blur(5px); /* 背景をぼかす */
-}

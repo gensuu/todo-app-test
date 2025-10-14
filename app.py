@@ -282,27 +282,19 @@ def todo_list(date_str=None):
         except ValueError:
             return redirect(url_for('todo_list'))
     
-    # --- ▼▼▼ 修正点: タスク数を計算するロジックを復活 ▼▼▼ ---
     first_day_of_month = target_date.replace(day=1)
     next_month_first_day = (first_day_of_month + timedelta(days=32)).replace(day=1)
     
-    uncompleted_tasks_in_month = MasterTask.query.filter(
+    uncompleted_tasks_count = db.session.query(
+        MasterTask.due_date, func.count(SubTask.id)
+    ).join(SubTask).filter(
         MasterTask.user_id == current_user.id,
         MasterTask.due_date >= first_day_of_month,
         MasterTask.due_date < next_month_first_day,
-        MasterTask.subtasks.any(SubTask.is_completed == False)
-    ).all()
+        SubTask.is_completed == False
+    ).group_by(MasterTask.due_date).all()
     
-    task_counts = {}
-    for task in uncompleted_tasks_in_month:
-        # 日付オブジェクトをキーにする
-        due_date_key = task.due_date
-        count = task_counts.get(due_date_key, 0)
-        task_counts[due_date_key] = count + 1
-
-    # JavaScriptで扱いやすいように、キーを文字列 'YYYY-MM-DD' に変換
-    task_counts_for_js = {d.isoformat(): c for d, c in task_counts.items()}
-    # --- ▲▲▲ 修正ここまで ▲▲▲ ---
+    task_counts_for_js = {d.isoformat(): c for d, c in uncompleted_tasks_count}
 
     master_tasks_query = MasterTask.query.options(
         selectinload(MasterTask.subtasks)
@@ -320,10 +312,16 @@ def todo_list(date_str=None):
         mt.visible_subtasks = visible_subtasks
         subtasks_as_dicts = [
             {"id": st.id, "content": st.content, "is_completed": st.is_completed, "grid_count": st.grid_count} 
-            for st in visible_subtasks
+            for st in mt.subtasks
         ]
         mt.visible_subtasks_json = json.dumps(subtasks_as_dicts)
-        mt.all_completed = all(st.is_completed for st in visible_subtasks)
+        
+        mt.all_completed = all(st.is_completed for st in mt.subtasks)
+        if mt.all_completed:
+            mt.last_completion_date = max(st.completion_date for st in mt.subtasks if st.completion_date)
+        else:
+            mt.last_completion_date = None
+        
         master_tasks_for_template.append(mt)
 
     master_tasks = master_tasks_for_template
@@ -346,7 +344,7 @@ def todo_list(date_str=None):
         GRID_COLS=GRID_COLS, 
         grid_rows=grid_rows, 
         summary=latest_summary,
-        task_counts=task_counts_for_js # --- ▼▼▼ 修正点: テンプレートに渡す ---
+        task_counts=task_counts_for_js
     )
     
 @app.route('/add_or_edit_task', methods=['GET', 'POST'])
@@ -356,6 +354,9 @@ def add_or_edit_task(master_id=None):
     master_task = MasterTask.query.get_or_404(master_id) if master_id else None
     if master_task and master_task.user_id != current_user.id:
         flash("権限がありません。"); return redirect(url_for('todo_list'))
+
+    from_url = url_for('add_or_edit_task', master_id=master_id) if master_id else url_for('add_or_edit_task')
+
     if request.method == 'POST':
         if 'save_as_template' in request.form:
             template_title = request.form.get('master_title')
@@ -377,7 +378,9 @@ def add_or_edit_task(master_id=None):
             if subtask_count == 0:
                 flash("サブタスクが1つもないため、テンプレートは保存されませんでした。"); db.session.rollback(); return redirect(request.url)
             db.session.commit()
-            flash(f"テンプレート「{template_title}」を保存しました。"); return redirect(url_for('manage_templates'))
+            flash(f"テンプレート「{template_title}」を保存しました。"); 
+            return redirect(url_for('manage_templates', back_url=from_url))
+            
         master_title, due_date_str = request.form.get('master_title'), request.form.get('due_date')
         is_urgent = True if request.form.get('is_urgent') else False
         due_date_obj = datetime.strptime(due_date_str, '%Y-%m-%d').date() if due_date_str else get_jst_today()
@@ -393,6 +396,7 @@ def add_or_edit_task(master_id=None):
                 db.session.add(SubTask(master_id=master_task.id, content=sub_content, grid_count=int(grid_count_str)))
         db.session.commit()
         return redirect(url_for('todo_list', date_str=master_task.due_date.strftime('%Y-%m-%d')))
+    
     default_date = get_jst_today()
     date_str_from_url = request.args.get('date_str')
     if date_str_from_url:
@@ -417,13 +421,36 @@ def complete_subtask_api(subtask_id):
 
     update_summary(current_user.id)
 
+    master_task = subtask.master_task
+    master_task.all_completed = all(st.is_completed for st in master_task.subtasks)
+    if master_task.all_completed:
+        master_task.last_completion_date = max(st.completion_date for st in master_task.subtasks if st.completion_date)
+    else:
+        master_task.last_completion_date = None
+        
+    updated_header_html = render_template('_master_task_header.html', master_task=master_task)
+    
     today = get_jst_today()
+    target_date = today
+    # --- ▼▼▼ 修正点: JSONボディから安全に日付を取得 ---
+    if request.is_json and request.json.get('current_date'):
+        try:
+            target_date = datetime.strptime(request.json['current_date'], '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            target_date = today
+    else:
+        target_date = today
+
+
     master_tasks_today = MasterTask.query.filter(
         MasterTask.user_id == current_user.id,
-        MasterTask.subtasks.any(or_(SubTask.is_completed == False, SubTask.completion_date == today))
+        MasterTask.subtasks.any(or_(SubTask.is_completed == False, SubTask.completion_date == target_date))
     ).all()
     
-    all_subtasks_for_day = [st for mt in master_tasks_today for st in mt.subtasks if not st.is_completed or st.completion_date == today]
+    all_subtasks_for_day = []
+    for mt in master_tasks_today:
+        all_subtasks_for_day.extend([st for st in mt.subtasks if not st.is_completed or st.completion_date == target_date])
+
     total_grid_count = sum(sub.grid_count for sub in all_subtasks_for_day)
     completed_grid_count = sum(sub.grid_count for sub in all_subtasks_for_day if sub.is_completed)
 
@@ -439,7 +466,8 @@ def complete_subtask_api(subtask_id):
         'is_completed': subtask.is_completed,
         'total_grid_count': total_grid_count,
         'completed_grid_count': completed_grid_count,
-        'summary': summary_data
+        'summary': summary_data,
+        'updated_header_html': updated_header_html
     })
 
 @app.route('/import', methods=['GET', 'POST'])
@@ -488,6 +516,8 @@ def import_excel():
 @app.route('/templates', methods=['GET', 'POST'])
 @login_required
 def manage_templates():
+    back_url = request.args.get('back_url')
+
     if request.method == 'POST':
         title = request.form.get('template_title')
         if not title:
@@ -502,7 +532,7 @@ def manage_templates():
         flash(f"テンプレート「{title}」を作成しました。")
         return redirect(url_for('manage_templates'))
     templates = TaskTemplate.query.filter_by(user_id=current_user.id).order_by(TaskTemplate.title).all()
-    return render_template('manage_templates.html', templates=templates)
+    return render_template('manage_templates.html', templates=templates, back_url=back_url)
 
 @app.route('/delete_template/<int:template_id>', methods=['POST'])
 @login_required

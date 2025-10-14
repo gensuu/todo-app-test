@@ -1,0 +1,15 @@
+<span class="task-title-clickable {% if master_task.is_urgent %}text-urgent{% endif %}" 
+      data-bs-toggle="modal" 
+      data-bs-target="#taskFocusModal"
+      data-task-title="{{ master_task.title }}"
+      data-task-subtasks='{{ master_task.visible_subtasks_json | safe }}'>
+    {{ master_task.title }}
+    
+    {% if master_task.all_completed and master_task.last_completion_date %}
+        {% set diff_days = (master_task.last_completion_date - master_task.due_date).days %}
+        <small class="text-muted">(期限:{{ master_task.due_date.strftime('%m/%d') }} | 完了:{{ master_task.last_completion_date.strftime('%m/%d') }} {% if diff_days != 0 %}<span class="diff-days">({{ '%+d'|format(diff_days) }}日)</span>{% endif %})</small>
+    {% else %}
+        <small class="text-muted">({{ master_task.due_date.strftime('%m/%d') }})</small>
+    {% endif %}
+</span>
+<a href="{{ url_for('add_or_edit_task', master_id=master_task.id) }}" class="btn btn-sm btn-outline-light">[編集]</a>   

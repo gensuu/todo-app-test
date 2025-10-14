@@ -5,9 +5,9 @@
  * @param {Date} dateToDisplay - カレンダーを表示する基準日
  * @param {Date} currentDate - 現在選択されている日付
  * @param {Date} today - 今日の日付
- * @param {Object} taskCounts - 日付ごとのタスク数 {'YYYY-MM-DD': count}
+ * @param {Object} taskCounts - 日付ごとの未完了タスク数 {'YYYY-MM-DD': count}
  */
-function generateCalendar(dateToDisplay, currentDate, today, taskCounts = {}) { // --- ▼▼▼ 修正点: taskCounts引数を追加
+function generateCalendar(dateToDisplay, currentDate, today, taskCounts = {}) {
     const year = dateToDisplay.getFullYear();
     const month = dateToDisplay.getMonth(); // 0-11
 
@@ -44,10 +44,11 @@ function generateCalendar(dateToDisplay, currentDate, today, taskCounts = {}) { 
                 if (currentDay.toDateString() === today.toDateString()) classes.push('today');
                 if (currentDay.toDateString() === currentDate.toDateString()) classes.push('current-date');
                 
-                // --- ▼▼▼ 修正点: taskCountsを使ってドットを描画する ---
+                // --- ▼▼▼ 変更点: taskCountsを使ってドットを描画する ---
                 let dotsHtml = '';
                 if (taskCounts[loopDateStr] > 0) {
                     dotsHtml += '<div class="task-dots">';
+                    // 未完了タスクの数だけドットを追加（最大8個）
                     for (let k = 0; k < Math.min(taskCounts[loopDateStr], 8); k++) {
                         dotsHtml += '<span class="task-dot"></span>';
                     }
@@ -72,6 +73,10 @@ function generateCalendar(dateToDisplay, currentDate, today, taskCounts = {}) { 
     return calendarHeader + calendarBody;
 }
 
+/**
+ * 日付ナビゲーションのHTMLを生成する
+ * @param {Date} currentDate - 現在選択されている日付
+ */
 function generateDateNav(currentDate) {
     const prevDay = new Date(currentDate);
     prevDay.setDate(currentDate.getDate() - 1);

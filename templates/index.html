@@ -65,23 +65,9 @@
             <h2>タスク一覧</h2>
             {% for master_task in master_tasks %}
                 {% if master_task.visible_subtasks %}
-                <div class="card master-task-card mb-3 {% if master_task.all_completed %}all-completed{% endif %}">
+                <div class="card master-task-card mb-3 {% if master_task.all_completed %}all-completed{% endif %}" data-master-id="{{ master_task.id }}">
                     <div class="card-header d-flex justify-content-between align-items-center">
-                        <span class="task-title-clickable {% if master_task.is_urgent %}text-urgent{% endif %}" 
-                              data-bs-toggle="modal" 
-                              data-bs-target="#taskFocusModal"
-                              data-task-title="{{ master_task.title }}"
-                              data-task-subtasks='{{ master_task.visible_subtasks_json | safe }}'>
-                            {{ master_task.title }}
-                            {% set relevant_subtask = master_task.subtasks|selectattr('completion_date', 'equalto', current_date)|first %}
-                            {% if relevant_subtask %}
-                                {% set diff_days = (relevant_subtask.completion_date - master_task.due_date).days %}
-                                <small class="text-muted">(期限:{{ master_task.due_date.strftime('%m/%d') }} | 完了:{{ relevant_subtask.completion_date.strftime('%m/%d') }} {% if diff_days != 0 %}<span class="diff-days">({{ '%+d'|format(diff_days) }}日)</span>{% endif %})</small>
-                            {% else %}
-                                <small class="text-muted">({{ master_task.due_date.strftime('%m/%d') }})</small>
-                            {% endif %}
-                        </span>
-                        <a href="{{ url_for('add_or_edit_task', master_id=master_task.id) }}" class="btn btn-sm btn-outline-light">[編集]</a>
+                        {% include '_master_task_header.html' %}
                     </div>
                     <ul class="list-group list-group-flush">
                         {% for subtask in master_task.visible_subtasks %}
@@ -162,6 +148,8 @@
 <script>
 document.addEventListener('DOMContentLoaded', () => {
 
+    const CURRENT_DATE_STR = "{{ current_date.strftime('%Y-%m-%d') }}";
+
     const completedCountDisplay = document.getElementById('completed-count-display');
     const totalCountDisplay = document.getElementById('total-count-display');
     const gridContainer = document.querySelector('.new-grid-container');
@@ -171,17 +159,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const progressCircle = document.querySelector('.progress-circle');
     const progressText = document.querySelector('.progress-text');
 
-    function updateUI(data) {
+    function updateDynamicUI(data) {
         if (completedCountDisplay) completedCountDisplay.textContent = data.completed_grid_count;
         if (totalCountDisplay) totalCountDisplay.textContent = data.total_grid_count;
+        
         if (gridCells.length > 0) {
             gridCells.forEach((cell, index) => {
                 cell.classList.toggle('completed', index < data.completed_grid_count);
                 cell.classList.toggle('task-area', index < data.total_grid_count);
             });
         }
+        
         if (summaryStreak) summaryStreak.textContent = data.summary.streak;
         if (summaryAverageGrids) summaryAverageGrids.textContent = data.summary.average_grids;
+        
         if (progressCircle && progressText) {
             const percentage = data.total_grid_count > 0 ? (data.completed_grid_count / data.total_grid_count * 100) : 0;
             progressCircle.style.setProperty('--progress', `${percentage}%`); 
@@ -195,76 +186,115 @@ document.addEventListener('DOMContentLoaded', () => {
         progressCircle.style.setProperty('--progress', `${initialPercentage}%`);
     }
 
-    // --- ▼▼▼ 修正点: タスク完了処理を修正 ▼▼▼ ---
-    document.querySelectorAll('.complete-toggle').forEach(toggle => {
-        toggle.addEventListener('click', async (e) => {
-            // イベントの伝播を止める
-            e.preventDefault(); 
-            e.stopPropagation();
-
-            const subtaskLi = e.target.closest('li');
-            const subtaskId = subtaskLi.dataset.subtaskId;
+    async function handleTaskCompletion(subtaskId) {
+        try {
+            const response = await fetch(`/api/complete_subtask/${subtaskId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ current_date: CURRENT_DATE_STR })
+            });
             
-            // UIを楽観的に更新
-            const isNowCompleted = !subtaskLi.classList.contains('completed');
-            subtaskLi.classList.toggle('completed', isNowCompleted);
-            e.target.classList.toggle('bi-check-square-fill', isNowCompleted);
-            e.target.classList.toggle('bi-square', !isNowCompleted);
-
-            try {
-                const response = await fetch(`/api/complete_subtask/${subtaskId}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                const data = await response.json();
-
-                if (!data.success) {
-                    throw new Error(data.error || "サーバーエラー");
-                }
-                
-                // APIからの最新データでUI全体を更新
-                updateUI(data);
-
-                // 親カードのスタイルを更新
-                const masterCard = subtaskLi.closest('.master-task-card');
-                if (masterCard) {
-                    const allSubtasks = masterCard.querySelectorAll('.sub-task');
-                    const completedSubtasks = masterCard.querySelectorAll('.sub-task.completed');
-                    const allCompleted = allSubtasks.length === completedSubtasks.length;
-                    masterCard.classList.toggle('all-completed', allCompleted);
-                }
-
-            } catch (error) {
-                console.error('Error:', error);
-                // 失敗した場合はUIを元に戻す
-                alert('更新に失敗しました。');
-                subtaskLi.classList.toggle('completed', !isNowCompleted);
-                e.target.classList.toggle('bi-check-square-fill', !isNowCompleted);
-                e.target.classList.toggle('bi-square', isNowCompleted);
+            if (!response.ok) { // 500エラーなどをここでキャッチ
+                throw new Error(`Server responded with status: ${response.status}`);
             }
+
+            const data = await response.json();
+
+            if (!data.success) { throw new Error(data.error || "サーバーエラー"); }
+            
+            return data; // 成功したらデータを返す
+        } catch (error) {
+            console.error('Error:', error);
+            alert('更新に失敗しました。');
+            return null; // 失敗したらnullを返す
+        }
+    }
+
+    function setupMainPageInteractions() {
+        document.querySelectorAll('#task-list-container .complete-toggle').forEach(toggle => {
+            toggle.addEventListener('click', async (e) => {
+                e.preventDefault(); 
+                e.stopPropagation();
+
+                const subtaskLi = e.target.closest('li');
+                const subtaskId = subtaskLi.dataset.subtaskId;
+
+                const data = await handleTaskCompletion(subtaskId);
+                
+                if (data) {
+                    // APIからの最新データでUIを更新
+                    const masterCard = subtaskLi.closest('.master-task-card');
+                    if (masterCard) {
+                        const header = masterCard.querySelector('.card-header');
+                        header.innerHTML = data.updated_header_html;
+                    }
+                    
+                    subtaskLi.classList.toggle('completed', data.is_completed);
+                    e.target.classList.toggle('bi-check-square-fill', data.is_completed);
+                    e.target.classList.toggle('bi-square', !data.is_completed);
+                    updateDynamicUI(data);
+
+                    if (masterCard) {
+                        const allSubtasks = masterCard.querySelectorAll('.sub-task');
+                        const completedSubtasks = masterCard.querySelectorAll('.sub-task.completed');
+                        const allCompleted = allSubtasks.length === completedSubtasks.length;
+                        masterCard.classList.toggle('all-completed', allCompleted);
+                    }
+                }
+            });
         });
-    });
+    }
+
+    setupMainPageInteractions();
 
     const taskFocusModal = document.getElementById('taskFocusModal');
+    let hasModalChanged = false;
+
     if (taskFocusModal) {
         taskFocusModal.addEventListener('show.bs.modal', event => {
+            hasModalChanged = false;
+
             const triggerElement = event.relatedTarget;
             const taskTitle = triggerElement.getAttribute('data-task-title');
+            const modalTitle = taskFocusModal.querySelector('.modal-title');
+            const modalBodyList = taskFocusModal.querySelector('#focus-subtask-list');
+            modalTitle.textContent = taskTitle;
+            modalBodyList.innerHTML = '';
+            
             try {
                 const subtasks = JSON.parse(triggerElement.getAttribute('data-task-subtasks'));
-                const modalTitle = taskFocusModal.querySelector('.modal-title');
-                const modalBodyList = taskFocusModal.querySelector('#focus-subtask-list');
-                modalTitle.textContent = taskTitle;
-                modalBodyList.innerHTML = '';
+                
                 if (subtasks && subtasks.length > 0) {
                     subtasks.forEach(subtask => {
                         const li = document.createElement('li');
                         li.className = `list-group-item sub-task d-flex align-items-center ${subtask.is_completed ? 'completed' : ''}`;
                         li.dataset.subtaskId = subtask.id;
-                        const iconClass = subtask.is_completed ? 'bi-check-square-fill' : 'bi-square';
-                        li.innerHTML = `
-                            <i class="bi ${iconClass}" style="margin-right: 10px;"></i>
-                            <span class="flex-grow-1">${subtask.content} (${subtask.grid_count}マス)</span>`;
+                        
+                        const icon = document.createElement('i');
+                        icon.className = `bi ${subtask.is_completed ? 'bi-check-square-fill' : 'bi-square'}`;
+                        icon.style.cursor = 'pointer';
+                        icon.style.marginRight = '10px';
+                        
+                        icon.addEventListener('click', async () => {
+                            const currentLi = icon.closest('li');
+                            const subtaskId = currentLi.dataset.subtaskId;
+                            
+                            const data = await handleTaskCompletion(subtaskId);
+
+                            if (data) {
+                                currentLi.classList.toggle('completed', data.is_completed);
+                                icon.classList.toggle('bi-check-square-fill', data.is_completed);
+                                icon.classList.toggle('bi-square', !data.is_completed);
+                                hasModalChanged = true;
+                            }
+                        });
+                        
+                        const span = document.createElement('span');
+                        span.className = 'flex-grow-1';
+                        span.textContent = `${subtask.content} (${subtask.grid_count}マス)`;
+                        
+                        li.appendChild(icon);
+                        li.appendChild(span);
                         modalBodyList.appendChild(li);
                     });
                 } else {
@@ -272,6 +302,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } catch(e) {
                 console.error("Failed to parse subtasks for modal:", e);
+                modalBodyList.innerHTML = '<li class="list-group-item text-danger">データの読み込みに失敗しました。</li>';
+            }
+        });
+
+        taskFocusModal.addEventListener('hidden.bs.modal', () => {
+            if (hasModalChanged) {
+                window.location.reload();
             }
         });
     }
@@ -284,6 +321,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let displayedMonthDate = new Date(currentDate);
 
     function renderCalendar() {
+        if (!calendarContainer) return;
         calendarContainer.innerHTML = generateCalendar(displayedMonthDate, currentDate, today, taskCounts);
         document.getElementById('prev-month-btn').addEventListener('click', (e) => {
             e.preventDefault();
@@ -297,12 +335,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (calendarContainer) {
-        renderCalendar();
-    }
     if (dateNavContainer) {
         dateNavContainer.innerHTML = generateDateNav(currentDate);
     }
+    
+    renderCalendar();
 });
 </script>
 {% endblock %}

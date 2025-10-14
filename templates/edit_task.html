@@ -34,10 +34,10 @@
                                     緊急のタスクとしてマークする
                                 </label>
                             </div>
-                            <button type="submit" name="save_as_template" value="true" class="btn btn-outline-secondary btn-sm rounded-circle" title="現在の内容をテンプレートとして保存">
+                            <button type="button" id="save-as-template-btn" class="btn btn-outline-secondary btn-sm rounded-circle" title="現在の内容をテンプレートとして保存">
                                 <i class="bi bi-bookmark-plus"></i>
                             </button>
-                            </div>
+                        </div>
                         <div class="mb-3">
                             <label for="master_title" class="form-label">親タスクのタイトル</label>
                             <input type="text" class="form-control" id="master_title" name="master_title" value="{{ master_task.title if master_task else '' }}" required>
@@ -47,11 +47,8 @@
                             <input type="date" class="form-control" id="due_date" name="due_date" value="{{ (master_task.due_date if master_task else default_date).strftime('%Y-%m-%d') }}">
                         </div>
                         <hr>
-                        
                         <h5 class="mb-3">サブタスク</h5>
-                        <div id="subtasks-container">
-                            </div>
-
+                        <div id="subtasks-container"></div>
                         <div class="d-grid gap-2 d-md-flex justify-content-md-between mt-4">
                             <button type="button" id="add-subtask-btn" class="btn btn-secondary"><i class="bi bi-plus-circle"></i> サブタスクを追加</button>
                             <div>
@@ -79,32 +76,22 @@
 
         const createSubtaskRow = (task = { content: '', grid_count: 1 }) => {
             if (subtaskCounter >= maxSubtasks) return;
-            const newIndex = subtaskCounter + 1;
+            const newIndex = ++subtaskCounter;
             const row = document.createElement('div');
-            row.classList.add('row', 'g-2', 'mb-2', 'align-items-center', 'subtask-row');
+            row.className = 'row g-2 mb-2 align-items-center subtask-row';
             row.innerHTML = `
-                <div class="col">
-                    <input type="text" class="form-control" name="sub_content_${newIndex}" placeholder="サブタスクの内容" value="${task.content}" required>
-                </div>
-                <div class="col-4 col-md-3">
-                    <div class="input-group">
-                        <input type="number" class="form-control" name="grid_count_${newIndex}" min="1" value="${task.grid_count}" required>
-                        <span class="input-group-text">マス</span>
-                    </div>
-                </div>
-                <div class="col-auto">
-                    <button type="button" class="btn btn-sm btn-danger remove-subtask-btn"><i class="bi bi-trash"></i></button>
-                </div>
+                <div class="col"><input type="text" class="form-control" name="sub_content_${newIndex}" placeholder="サブタスクの内容" value="${task.content}" required></div>
+                <div class="col-4 col-md-3"><div class="input-group"><input type="number" class="form-control" name="grid_count_${newIndex}" min="1" value="${task.grid_count}" required><span class="input-group-text">マス</span></div></div>
+                <div class="col-auto"><button type="button" class="btn btn-sm btn-danger remove-subtask-btn"><i class="bi bi-trash"></i></button></div>
             `;
             container.appendChild(row);
-            subtaskCounter = newIndex;
         };
         
         const populateSubtasks = (tasks) => {
             container.innerHTML = '';
             subtaskCounter = 0;
             if (tasks && tasks.length > 0) {
-                tasks.forEach(task => createSubtaskRow(task));
+                tasks.forEach(createSubtaskRow);
             } else {
                 createSubtaskRow(); 
             }
@@ -116,21 +103,18 @@
             createSubtaskRow();
         }
 
-        const templateSelector = document.getElementById('template_selector');
-        if (templateSelector) {
-            templateSelector.addEventListener('change', (e) => {
-                const templateId = e.target.value;
-                const masterTitleInput = document.getElementById('master_title');
-                if (templateId && templatesData[templateId]) {
-                    const selectedTemplate = templatesData[templateId];
-                    masterTitleInput.value = selectedTemplate.title;
-                    populateSubtasks(selectedTemplate.subtasks);
-                } else {
-                    masterTitleInput.value = '';
-                    populateSubtasks([]);
-                }
-            });
-        }
+        document.getElementById('template_selector')?.addEventListener('change', (e) => {
+            const templateId = e.target.value;
+            const masterTitleInput = document.getElementById('master_title');
+            if (templateId && templatesData[templateId]) {
+                const t = templatesData[templateId];
+                masterTitleInput.value = t.title;
+                populateSubtasks(t.subtasks);
+            } else {
+                masterTitleInput.value = '';
+                populateSubtasks([]);
+            }
+        });
 
         addBtn.addEventListener('click', () => createSubtaskRow());
         container.addEventListener('click', (e) => {
@@ -142,19 +126,86 @@
         const saveButton = document.getElementById('save-task-btn');
         const form = document.getElementById('task-form');
 
+        // --- ▼▼▼ 修正点: `async`キーワードを削除し、Promiseのthen/catchを使う ---
         saveButton.addEventListener('click', () => {
-            // バリデーション
-            if (form.reportValidity()) {
-                // 編集か新規追加かでactionを決定
-                {% if master_task %}
-                    form.action = "{{ url_for('add_or_edit_task', master_id=master_task.id) }}";
-                {% else %}
-                    form.action = "{{ url_for('add_or_edit_task') }}";
-                {% endif %}
-                // フォームをサーバーに送信
+            if (!form.reportValidity()) return;
+
+            {% if master_task %}
+                if (!navigator.onLine) {
+                    alert("タスクの編集はオンラインである必要があります。");
+                    return;
+                }
+                form.action = "{{ url_for('add_or_edit_task', master_id=master_task.id) }}";
+                form.submit();
+                return;
+            {% endif %}
+
+            const isOffline = localStorage.getItem('offlineMode') === 'true' || !navigator.onLine;
+
+            const taskData = {
+                title: document.getElementById('master_title').value.trim(),
+                due_date: document.getElementById('due_date').value,
+                is_urgent: document.getElementById('is_urgent').checked,
+                subtasks: Array.from(document.querySelectorAll('.subtask-row')).map(row => ({
+                    content: row.querySelector('input[name^="sub_content_"]').value.trim(),
+                    grid_count: parseInt(row.querySelector('input[name^="grid_count_"]').value, 10)
+                }))
+            };
+
+            if (isOffline) {
+                saveNewTaskToOutbox(taskData)
+                    .then(() => {
+                        window.location.href = `/todo/${taskData.due_date}`;
+                    })
+                    .catch(error => {
+                        console.error("Failed to save offline task:", error);
+                        alert("オフラインでのタスク保存に失敗しました。");
+                    });
+            } else {
+                form.action = "{{ url_for('add_or_edit_task') }}";
+                form.submit();
+            }
+        });
+
+        const saveAsTemplateButton = document.getElementById('save-as-template-btn');
+        saveAsTemplateButton.addEventListener('click', () => {
+            const title = document.getElementById('master_title').value.trim();
+            if (!title) {
+                alert("テンプレートとして保存するには、親タスクのタイトルが必要です。");
+                return;
+            }
+            const subtasks = Array.from(document.querySelectorAll('.subtask-row')).map(row => ({
+                content: row.querySelector('input[name^="sub_content_"]').value.trim(),
+                grid_count: parseInt(row.querySelector('input[name^="grid_count_"]').value, 10)
+            })).filter(s => s.content);
+
+            if (subtasks.length === 0) {
+                alert("テンプレートとして保存するには、最低1つのサブタスクが必要です。");
+                return;
+            }
+
+            const templateData = { title, subtasks };
+            const isOffline = localStorage.getItem('offlineMode') === 'true' || !navigator.onLine;
+
+            if (isOffline) {
+                saveTemplateToOutbox(templateData)
+                    .then(() => {
+                        alert("テンプレートをオフラインで保存しました。");
+                    })
+                    .catch(() => {
+                        alert("テンプレートのオフライン保存に失敗しました。");
+                    });
+            } else {
+                const hiddenInput = document.createElement('input');
+                hiddenInput.type = 'hidden';
+                hiddenInput.name = 'save_as_template';
+                hiddenInput.value = 'true';
+                form.appendChild(hiddenInput);
+                form.action = "{{ url_for('add_or_edit_task', master_id=master_task.id if master_task else None) }}";
                 form.submit();
             }
         });
     });
 </script>
 {% endblock %}
+
