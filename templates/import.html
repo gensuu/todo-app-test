@@ -25,7 +25,7 @@
                         <p class="small text-muted mb-0">※ 同じ親タスク名と期限日の行は、一つの親タスクとしてまとめられます。</p>
                     </div>
 
-                    <form method="post" enctype="multipart/form-data">
+                    <form method="post" enctype="multipart/form-data" id="import-form">
                         <div class="mb-3">
                             <label for="excel_file" class="form-label">Excelファイルを選択</label>
                             <input class="form-control" type="file" id="excel_file" name="excel_file" accept=".xlsx" required>
@@ -42,3 +42,19 @@
 </div>
 {% endblock %}
 
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const importForm = document.getElementById('import-form');
+    if (importForm) {
+        importForm.addEventListener('submit', (e) => {
+            // ファイルが選択されているかチェック
+            const fileInput = document.getElementById('excel_file');
+            if (fileInput.files.length > 0) {
+                showLoadingOverlay('Excelファイルをインポート中...');
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

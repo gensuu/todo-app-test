@@ -411,9 +411,9 @@ def add_or_edit_task(master_id=None):
 @app.route('/api/complete_subtask/<int:subtask_id>', methods=['POST'])
 @login_required
 def complete_subtask_api(subtask_id):
-    subtask = SubTask.query.get_or_404(subtask_id)
-    if subtask.master_task.user_id != current_user.id:
-        return jsonify({'success': False, 'error': 'Permission denied'}), 403
+    subtask = db.session.get(SubTask, subtask_id)
+    if not subtask or subtask.master_task.user_id != current_user.id:
+        return jsonify({'success': False, 'error': 'Permission denied or Task not found'}), 403
 
     subtask.is_completed = not subtask.is_completed
     subtask.completion_date = get_jst_today() if subtask.is_completed else None
@@ -422,26 +422,29 @@ def complete_subtask_api(subtask_id):
     update_summary(current_user.id)
 
     master_task = subtask.master_task
+    
+    target_date_str = request.json.get('current_date') if request.is_json else None
+    try:
+        target_date = datetime.strptime(target_date_str, '%Y-%m-%d').date() if target_date_str else get_jst_today()
+    except (ValueError, TypeError):
+        target_date = get_jst_today()
+
+    # visible_subtasksを再計算してJSONに渡す
+    master_task.visible_subtasks = [st for st in master_task.subtasks if not st.is_completed or st.completion_date == target_date]
+    subtasks_as_dicts = [
+        {"id": st.id, "content": st.content, "is_completed": st.is_completed, "grid_count": st.grid_count} 
+        for st in master_task.subtasks
+    ]
+    master_task.visible_subtasks_json = json.dumps(subtasks_as_dicts)
     master_task.all_completed = all(st.is_completed for st in master_task.subtasks)
     if master_task.all_completed:
-        master_task.last_completion_date = max(st.completion_date for st in master_task.subtasks if st.completion_date)
+        valid_dates = [st.completion_date for st in master_task.subtasks if st.completion_date]
+        master_task.last_completion_date = max(valid_dates) if valid_dates else None
     else:
         master_task.last_completion_date = None
         
     updated_header_html = render_template('_master_task_header.html', master_task=master_task)
     
-    today = get_jst_today()
-    target_date = today
-    # --- ▼▼▼ 修正点: JSONボディから安全に日付を取得 ---
-    if request.is_json and request.json.get('current_date'):
-        try:
-            target_date = datetime.strptime(request.json['current_date'], '%Y-%m-%d').date()
-        except (ValueError, TypeError):
-            target_date = today
-    else:
-        target_date = today
-
-
     master_tasks_today = MasterTask.query.filter(
         MasterTask.user_id == current_user.id,
         MasterTask.subtasks.any(or_(SubTask.is_completed == False, SubTask.completion_date == target_date))
@@ -467,8 +470,10 @@ def complete_subtask_api(subtask_id):
         'total_grid_count': total_grid_count,
         'completed_grid_count': completed_grid_count,
         'summary': summary_data,
-        'updated_header_html': updated_header_html
+        'updated_header_html': updated_header_html,
+        'master_task_id': subtask.master_id
     })
+
 
 @app.route('/import', methods=['GET', 'POST'])
 @login_required

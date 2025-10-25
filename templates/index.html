@@ -149,43 +149,40 @@
 document.addEventListener('DOMContentLoaded', () => {
 
     const CURRENT_DATE_STR = "{{ current_date.strftime('%Y-%m-%d') }}";
+    const taskFocusModal = document.getElementById('taskFocusModal');
 
-    const completedCountDisplay = document.getElementById('completed-count-display');
-    const totalCountDisplay = document.getElementById('total-count-display');
-    const gridContainer = document.querySelector('.new-grid-container');
-    const gridCells = gridContainer ? Array.from(gridContainer.children) : [];
-    const summaryStreak = document.getElementById('summary-streak');
-    const summaryAverageGrids = document.getElementById('summary-average-grids');
-    const progressCircle = document.querySelector('.progress-circle');
-    const progressText = document.querySelector('.progress-text');
+    // --- ▼▼▼ 改善点1: UI更新とAPI通信のロジックを共通関数に集約 ▼▼▼ ---
 
+    /**
+     * すべての動的なUI要素（グリッド、サマリー、進捗サークル）を最新データで更新する
+     * @param {object} data - APIから返されたデータ
+     */
     function updateDynamicUI(data) {
-        if (completedCountDisplay) completedCountDisplay.textContent = data.completed_grid_count;
-        if (totalCountDisplay) totalCountDisplay.textContent = data.total_grid_count;
+        document.getElementById('completed-count-display').textContent = data.completed_grid_count;
+        document.getElementById('total-count-display').textContent = data.total_grid_count;
         
-        if (gridCells.length > 0) {
-            gridCells.forEach((cell, index) => {
-                cell.classList.toggle('completed', index < data.completed_grid_count);
-                cell.classList.toggle('task-area', index < data.total_grid_count);
-            });
-        }
+        const gridCells = document.querySelectorAll('.new-grid-container .grid-cell');
+        gridCells.forEach((cell, index) => {
+            cell.classList.toggle('completed', index < data.completed_grid_count);
+            cell.classList.toggle('task-area', index < data.total_grid_count);
+        });
         
-        if (summaryStreak) summaryStreak.textContent = data.summary.streak;
-        if (summaryAverageGrids) summaryAverageGrids.textContent = data.summary.average_grids;
+        document.getElementById('summary-streak').textContent = data.summary.streak;
+        document.getElementById('summary-average-grids').textContent = data.summary.average_grids;
         
+        const progressCircle = document.querySelector('.progress-circle');
+        const progressText = document.querySelector('.progress-text');
         if (progressCircle && progressText) {
             const percentage = data.total_grid_count > 0 ? (data.completed_grid_count / data.total_grid_count * 100) : 0;
             progressCircle.style.setProperty('--progress', `${percentage}%`); 
             progressText.textContent = `${Math.round(percentage)}%`;
         }
     }
-    
-    if (progressCircle && progressText) {
-        const initialPercentage = parseFloat(progressCircle.dataset.progress || 0);
-        progressText.textContent = `${Math.round(initialPercentage)}%`;
-        progressCircle.style.setProperty('--progress', `${initialPercentage}%`);
-    }
 
+    /**
+     * サブタスクの完了状態をサーバーに送信し、UIを更新する
+     * @param {string} subtaskId - 対象のサブタスクID
+     */
     async function handleTaskCompletion(subtaskId) {
         try {
             const response = await fetch(`/api/complete_subtask/${subtaskId}`, {
@@ -194,125 +191,108 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ current_date: CURRENT_DATE_STR })
             });
             
-            if (!response.ok) { // 500エラーなどをここでキャッチ
-                throw new Error(`Server responded with status: ${response.status}`);
+            if (!response.ok) throw new Error(`Server responded with status: ${response.status}`);
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || "サーバーエラー");
+
+            // --- UI更新処理 ---
+            
+            // 1. メインページとモーダル内の両方のタスクリスト項目を更新
+            document.querySelectorAll(`.sub-task[data-subtask-id='${subtaskId}']`).forEach(li => {
+                const icon = li.querySelector('.complete-toggle, .bi');
+                li.classList.toggle('completed', data.is_completed);
+                icon.classList.toggle('bi-check-square-fill', data.is_completed);
+                icon.classList.toggle('bi-square', !data.is_completed);
+            });
+
+            // 2. 親タスクのヘッダーとカード全体のスタイルを更新
+            const masterCard = document.querySelector(`.master-task-card[data-master-id='${data.master_task_id}']`);
+            if (masterCard) {
+                const header = masterCard.querySelector('.card-header');
+                header.innerHTML = data.updated_header_html;
+                
+                const allSubtasks = masterCard.querySelectorAll('.sub-task');
+                const completedSubtasks = masterCard.querySelectorAll('.sub-task.completed');
+                masterCard.classList.toggle('all-completed', allSubtasks.length === completedSubtasks.length);
             }
 
-            const data = await response.json();
+            // 3. グリッドやサマリーなどの動的UIをすべて更新
+            updateDynamicUI(data);
 
-            if (!data.success) { throw new Error(data.error || "サーバーエラー"); }
-            
-            return data; // 成功したらデータを返す
         } catch (error) {
             console.error('Error:', error);
-            alert('更新に失敗しました。');
-            return null; // 失敗したらnullを返す
+            alert('タスク状態の更新に失敗しました。ページをリロードしてください。');
         }
     }
 
-    function setupMainPageInteractions() {
-        document.querySelectorAll('#task-list-container .complete-toggle').forEach(toggle => {
-            toggle.addEventListener('click', async (e) => {
-                e.preventDefault(); 
+    // --- ▼▼▼ 改善点2: イベントリスナーのセットアップを簡潔に ▼▼▼ ---
+
+    /**
+     * イベントリスナーをセットアップする（メインページとモーダルで共通）
+     * @param {HTMLElement} parentElement - イベントを設定する親要素
+     */
+    function setupEventListeners(parentElement) {
+        parentElement.addEventListener('click', (e) => {
+            const toggle = e.target.closest('.complete-toggle');
+            if (toggle) {
+                e.preventDefault();
                 e.stopPropagation();
-
-                const subtaskLi = e.target.closest('li');
-                const subtaskId = subtaskLi.dataset.subtaskId;
-
-                const data = await handleTaskCompletion(subtaskId);
-                
-                if (data) {
-                    // APIからの最新データでUIを更新
-                    const masterCard = subtaskLi.closest('.master-task-card');
-                    if (masterCard) {
-                        const header = masterCard.querySelector('.card-header');
-                        header.innerHTML = data.updated_header_html;
-                    }
-                    
-                    subtaskLi.classList.toggle('completed', data.is_completed);
-                    e.target.classList.toggle('bi-check-square-fill', data.is_completed);
-                    e.target.classList.toggle('bi-square', !data.is_completed);
-                    updateDynamicUI(data);
-
-                    if (masterCard) {
-                        const allSubtasks = masterCard.querySelectorAll('.sub-task');
-                        const completedSubtasks = masterCard.querySelectorAll('.sub-task.completed');
-                        const allCompleted = allSubtasks.length === completedSubtasks.length;
-                        masterCard.classList.toggle('all-completed', allCompleted);
-                    }
-                }
-            });
+                const subtaskId = toggle.closest('li').dataset.subtaskId;
+                handleTaskCompletion(subtaskId);
+            }
         });
     }
 
-    setupMainPageInteractions();
-
-    const taskFocusModal = document.getElementById('taskFocusModal');
-    let hasModalChanged = false;
-
+    // メインページのタスクリストにイベントリスナーを設定
+    setupEventListeners(document.getElementById('task-list-container'));
+    
+    // モーダル表示時にイベントリスナーを設定
     if (taskFocusModal) {
         taskFocusModal.addEventListener('show.bs.modal', event => {
-            hasModalChanged = false;
-
             const triggerElement = event.relatedTarget;
             const taskTitle = triggerElement.getAttribute('data-task-title');
             const modalTitle = taskFocusModal.querySelector('.modal-title');
             const modalBodyList = taskFocusModal.querySelector('#focus-subtask-list');
             modalTitle.textContent = taskTitle;
-            modalBodyList.innerHTML = '';
             
             try {
                 const subtasks = JSON.parse(triggerElement.getAttribute('data-task-subtasks'));
-                
+                let listHtml = '';
                 if (subtasks && subtasks.length > 0) {
                     subtasks.forEach(subtask => {
-                        const li = document.createElement('li');
-                        li.className = `list-group-item sub-task d-flex align-items-center ${subtask.is_completed ? 'completed' : ''}`;
-                        li.dataset.subtaskId = subtask.id;
-                        
-                        const icon = document.createElement('i');
-                        icon.className = `bi ${subtask.is_completed ? 'bi-check-square-fill' : 'bi-square'}`;
-                        icon.style.cursor = 'pointer';
-                        icon.style.marginRight = '10px';
-                        
-                        icon.addEventListener('click', async () => {
-                            const currentLi = icon.closest('li');
-                            const subtaskId = currentLi.dataset.subtaskId;
-                            
-                            const data = await handleTaskCompletion(subtaskId);
-
-                            if (data) {
-                                currentLi.classList.toggle('completed', data.is_completed);
-                                icon.classList.toggle('bi-check-square-fill', data.is_completed);
-                                icon.classList.toggle('bi-square', !data.is_completed);
-                                hasModalChanged = true;
-                            }
-                        });
-                        
-                        const span = document.createElement('span');
-                        span.className = 'flex-grow-1';
-                        span.textContent = `${subtask.content} (${subtask.grid_count}マス)`;
-                        
-                        li.appendChild(icon);
-                        li.appendChild(span);
-                        modalBodyList.appendChild(li);
+                        listHtml += `
+                            <li class="list-group-item sub-task d-flex align-items-center ${subtask.is_completed ? 'completed' : ''}" data-subtask-id="${subtask.id}">
+                                <i class="bi ${subtask.is_completed ? 'bi-check-square-fill' : 'bi-square'} complete-toggle" style="cursor: pointer; margin-right: 10px;"></i>
+                                <span class="flex-grow-1">${subtask.content} (${subtask.grid_count}マス)</span>
+                            </li>`;
                     });
                 } else {
-                    modalBodyList.innerHTML = '<li class="list-group-item">サブタスクはありません。</li>';
+                    listHtml = '<li class="list-group-item">サブタスクはありません。</li>';
                 }
+                modalBodyList.innerHTML = listHtml;
+
+                // モーダル内のリストにもイベントリスナーを設定
+                setupEventListeners(modalBodyList);
+
             } catch(e) {
                 console.error("Failed to parse subtasks for modal:", e);
                 modalBodyList.innerHTML = '<li class="list-group-item text-danger">データの読み込みに失敗しました。</li>';
             }
         });
-
-        taskFocusModal.addEventListener('hidden.bs.modal', () => {
-            if (hasModalChanged) {
-                window.location.reload();
-            }
-        });
+        
+        // ▼▼▼ 改善点3: モーダルを閉じたときのリロード処理を削除 ▼▼▼
+        // これでモーダルを閉じてもリロードされなくなります。
     }
     
+    // --- 初期表示処理 ---
+    const progressCircle = document.querySelector('.progress-circle');
+    const progressText = document.querySelector('.progress-text');
+    if (progressCircle && progressText) {
+        const initialPercentage = parseFloat(progressCircle.dataset.progress || 0);
+        progressText.textContent = `${Math.round(initialPercentage)}%`;
+        progressCircle.style.setProperty('--progress', `${initialPercentage}%`);
+    }
+
     const calendarContainer = document.getElementById('calendar-container');
     const dateNavContainer = document.getElementById('date-nav-container');
     const currentDate = new Date("{{ current_date.strftime('%Y-%m-%d') }}T00:00:00");
@@ -342,4 +322,4 @@ document.addEventListener('DOMContentLoaded', () => {
     renderCalendar();
 });
 </script>
-{% endblock %}
+{% endblock %}  

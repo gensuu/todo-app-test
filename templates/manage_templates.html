@@ -21,12 +21,8 @@
                         <div class="d-grid gap-2 d-md-flex justify-content-md-between mt-4">
                             <button type="button" id="add-subtask-btn" class="btn btn-secondary"><i class="bi bi-plus-circle"></i> サブタスクを追加</button>
                             <div>
-                                {% if request.args.get('origin') == 'edit_task' %}
-                                    <a href="javascript:history.back()" class="btn btn-outline-secondary">戻る</a>
-                                {% else %}
-                                    <a href="{{ url_for('todo_list') }}" class="btn btn-outline-secondary">戻る</a>
-                                {% endif %}
-                                <!-- ▼▼▼ 修正点: type="button" に変更しIDを付与 ▼▼▼ -->
+                                <!-- ▼▼▼ 修正点: 戻るボタンのリンクを動的に変更 ▼▼▼ -->
+                                <a href="{{ back_url or url_for('todo_list') }}" class="btn btn-outline-secondary">戻る</a>
                                 <button type="button" id="save-template-btn" class="btn btn-primary">テンプレートを保存</button>
                             </div>
                         </div>
@@ -64,7 +60,7 @@
 
 {% block scripts %}
 <script>
-    // --- ▼▼▼ 修正点: オフライン保存機能を追加 ▼▼▼ ---
+    // --- ▼▼▼ 修正点: オフライン保存機能を追加 ▼▼▼
     async function loadAndDisplayOfflineTemplates() {
         const container = document.getElementById('offline-templates-container');
         const noTemplatesMessage = document.getElementById('no-templates-message');
@@ -164,4 +160,3 @@
     });
 </script>
 {% endblock %}
-
