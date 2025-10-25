@@ -17,11 +17,13 @@
                 <a class="nav-link btn btn-info text-start mb-2" href="{{ url_for('manage_templates') }}">
                     <i class="bi bi-journal-album"></i> テンプレート管理
                 </a>
-                <form action="{{ url_for('export_to_sheet') }}" method="post" class="d-grid">
+                {# スプレッドシート書き出しボタン。formタグでラップ #}
+                <form action="{{ url_for('export_to_sheet') }}" method="post" class="d-grid" id="export-sheet-form">
                     <button type="submit" class="btn btn-success text-start mb-2">
                         <i class="bi bi-file-earmark-spreadsheet-fill"></i> スプレッドシートへ書き出し
                     </button>
                 </form>
+                {# Excelインポートボタン。リンクのまま #}
                 <a class="nav-link btn btn-outline-secondary text-start mb-2" href="{{ url_for('import_excel') }}">
                     <i class="bi bi-file-earmark-arrow-up"></i> Excelからインポート
                 </a>
@@ -37,9 +39,10 @@
             <h1>Todoリスト</h1>
             <p class="lead">{{ current_date.strftime('%Y年%m月%d日') }}</p>
             <div class="date-nav" id="date-nav-container">
-                </div>
+                {# calendar.jsによって動的に挿入される #}
+            </div>
         </header>
-        
+
         <div class="grid-section">
             <button class="btn btn-secondary w-100 mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#collapseGrid" aria-expanded="true" aria-controls="collapseGrid">
                 🟦 タスク進捗 方眼グリッド (全 <span id="total-count-display">{{ total_grid_count }}</span> マス中 <span id="completed-count-display">{{ completed_grid_count }}</span> マス完了)
@@ -64,9 +67,11 @@
         <div class="task-list-container" id="task-list-container">
             <h2>タスク一覧</h2>
             {% for master_task in master_tasks %}
+                {# visible_subtasks が存在する場合のみカードを表示 #}
                 {% if master_task.visible_subtasks %}
-                <div class="card master-task-card mb-3 {% if master_task.all_completed %}all-completed{% endif %}" data-master-id="{{ master_task.id }}">
+                <div class="card master-task-card mb-3 {% if master_task.all_completed_today %}all-completed{% endif %}" data-master-id="{{ master_task.id }}">
                     <div class="card-header d-flex justify-content-between align-items-center">
+                        {# ヘッダー部分をインクルード #}
                         {% include '_master_task_header.html' %}
                     </div>
                     <ul class="list-group list-group-flush">
@@ -82,6 +87,7 @@
                 </div>
                 {% endif %}
             {% else %}
+                {# 表示するタスクがない場合のメッセージ #}
                 <div class="card card-body text-center" id="no-task-message">
                     <p class="mb-0">この日に表示するタスクはありません。</p>
                 </div>
@@ -91,13 +97,16 @@
 
     <aside class="col-md-3 d-none d-md-block sidebar-right">
         <div class="sidebar-sticky">
+             {# カレンダー表示エリア #}
             <div class="card calendar-card mb-4" id="calendar-container">
-                </div>
-            
+                 {# calendar.jsによって動的に挿入される #}
+            </div>
+
             <h2 class="sidebar-title">サマリー</h2>
             <div class="card summary-card text-center">
                 <div class="card-body">
                     <h5 class="card-title">今日の進捗</h5>
+                    {# 進捗サークル表示 #}
                     <div class="progress-circle" data-progress="{{ (completed_grid_count / total_grid_count * 100) if total_grid_count > 0 else 0 }}">
                         <span class="progress-text"></span>
                     </div>
@@ -116,17 +125,21 @@
     </aside>
 </div>
 
+{# スマホ用フッターナビゲーション #}
 <nav class="d-md-none navbar fixed-bottom navbar-dark bg-dark">
     <div class="container-fluid justify-content-around">
         <a href="{{ url_for('scratchpad', new='true') }}" class="btn btn-secondary scratchpad-btn-mobile" title="今からTodo"><i class="bi bi-pencil-square"></i></a>
         <a href="{{ url_for('add_or_edit_task', date_str=current_date.strftime('%Y-%m-%d')) }}" class="btn btn-primary" title="新しいタスクを追加"><i class="bi bi-plus-circle-fill"></i></a>
-        <form action="{{ url_for('export_to_sheet') }}" method="post" class="d-grid">
-            <button type="submit" class="btn btn-success" title="スプレッドシートへ書き出し"><i class="bi bi-file-earmark-spreadsheet-fill"></i></button>
-        </form>
-        <a href="{{ url_for('import_excel') }}" class="btn btn-outline-secondary" title="Excelからインポート"><i class="bi bi-file-earmark-arrow-up"></i></a>
+        {# スプレッドシート書き出しボタン（スマホ用） #}
+        <button type="button" class="btn btn-success" title="スプレッドシートへ書き出し" onclick="document.getElementById('export-sheet-form').submit();">
+            <i class="bi bi-file-earmark-spreadsheet-fill"></i>
+        </button>
+        {# Excelインポートボタン（スマホ用） - メニューに移動 #}
+        {# <a href="{{ url_for('import_excel') }}" class="btn btn-outline-secondary" title="Excelからインポート"><i class="bi bi-file-earmark-arrow-up"></i></a> #}
     </div>
 </nav>
 
+{# タスク集中モーダル #}
 <div class="modal fade" id="taskFocusModal" tabindex="-1" aria-labelledby="taskFocusModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
@@ -136,6 +149,7 @@
             </div>
             <div class="modal-body">
                 <ul class="list-group list-group-flush" id="focus-subtask-list">
+                    {# JavaScriptによって動的に挿入される #}
                 </ul>
             </div>
         </div>
@@ -150,31 +164,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const CURRENT_DATE_STR = "{{ current_date.strftime('%Y-%m-%d') }}";
     const taskFocusModal = document.getElementById('taskFocusModal');
+    const loadingOverlay = document.getElementById('loading-overlay'); // ローディング画面要素を取得
 
-    // --- ▼▼▼ 改善点1: UI更新とAPI通信のロジックを共通関数に集約 ▼▼▼ ---
+    // --- UI更新とAPI通信の共通関数 ---
 
     /**
-     * すべての動的なUI要素（グリッド、サマリー、進捗サークル）を最新データで更新する
+     * すべての動的なUI要素を最新データで更新する
      * @param {object} data - APIから返されたデータ
      */
     function updateDynamicUI(data) {
-        document.getElementById('completed-count-display').textContent = data.completed_grid_count;
-        document.getElementById('total-count-display').textContent = data.total_grid_count;
-        
+        const completedCountDisplay = document.getElementById('completed-count-display');
+        const totalCountDisplay = document.getElementById('total-count-display');
         const gridCells = document.querySelectorAll('.new-grid-container .grid-cell');
-        gridCells.forEach((cell, index) => {
-            cell.classList.toggle('completed', index < data.completed_grid_count);
-            cell.classList.toggle('task-area', index < data.total_grid_count);
-        });
-        
-        document.getElementById('summary-streak').textContent = data.summary.streak;
-        document.getElementById('summary-average-grids').textContent = data.summary.average_grids;
-        
+        const summaryStreak = document.getElementById('summary-streak');
+        const summaryAverageGrids = document.getElementById('summary-average-grids');
         const progressCircle = document.querySelector('.progress-circle');
         const progressText = document.querySelector('.progress-text');
+
+        if (completedCountDisplay) completedCountDisplay.textContent = data.completed_grid_count;
+        if (totalCountDisplay) totalCountDisplay.textContent = data.total_grid_count;
+
+        gridCells.forEach((cell, index) => {
+            cell.classList.toggle('completed', index < data.completed_grid_count);
+            cell.classList.toggle('task-area', index < data.total_grid_count); // 以前はなかったtask-areaの更新も追加
+        });
+
+        if (summaryStreak) summaryStreak.textContent = data.summary.streak;
+        if (summaryAverageGrids) summaryAverageGrids.textContent = data.summary.average_grids;
+
         if (progressCircle && progressText) {
             const percentage = data.total_grid_count > 0 ? (data.completed_grid_count / data.total_grid_count * 100) : 0;
-            progressCircle.style.setProperty('--progress', `${percentage}%`); 
+            progressCircle.style.setProperty('--progress', `${percentage}%`);
             progressText.textContent = `${Math.round(percentage)}%`;
         }
     }
@@ -190,42 +210,51 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ current_date: CURRENT_DATE_STR })
             });
-            
+
             if (!response.ok) throw new Error(`Server responded with status: ${response.status}`);
             const data = await response.json();
             if (!data.success) throw new Error(data.error || "サーバーエラー");
 
             // --- UI更新処理 ---
-            
+
             // 1. メインページとモーダル内の両方のタスクリスト項目を更新
             document.querySelectorAll(`.sub-task[data-subtask-id='${subtaskId}']`).forEach(li => {
-                const icon = li.querySelector('.complete-toggle, .bi');
-                li.classList.toggle('completed', data.is_completed);
-                icon.classList.toggle('bi-check-square-fill', data.is_completed);
-                icon.classList.toggle('bi-square', !data.is_completed);
+                const icon = li.querySelector('.complete-toggle'); // アイコン特定をより具体的に
+                if(icon) {
+                    li.classList.toggle('completed', data.is_completed);
+                    icon.classList.toggle('bi-check-square-fill', data.is_completed);
+                    icon.classList.toggle('bi-square', !data.is_completed);
+                }
             });
 
             // 2. 親タスクのヘッダーとカード全体のスタイルを更新
             const masterCard = document.querySelector(`.master-task-card[data-master-id='${data.master_task_id}']`);
             if (masterCard) {
                 const header = masterCard.querySelector('.card-header');
-                header.innerHTML = data.updated_header_html;
-                
-                const allSubtasks = masterCard.querySelectorAll('.sub-task');
-                const completedSubtasks = masterCard.querySelectorAll('.sub-task.completed');
-                masterCard.classList.toggle('all-completed', allSubtasks.length === completedSubtasks.length);
+                if (header) {
+                     header.innerHTML = data.updated_header_html;
+                     // ヘッダー内のクリックイベントリスナーを再設定する必要があるかもしれない
+                     // が、今回は_master_task_header.htmlの内容が単純なため、不要と判断
+                }
+
+                // Check completion status based on *visible* subtasks in the main list for styling
+                const visibleSubtasksInCard = masterCard.querySelectorAll('.list-group-item.sub-task');
+                const completedVisibleSubtasks = masterCard.querySelectorAll('.list-group-item.sub-task.completed');
+                masterCard.classList.toggle('all-completed', visibleSubtasksInCard.length > 0 && visibleSubtasksInCard.length === completedVisibleSubtasks.length);
             }
 
             // 3. グリッドやサマリーなどの動的UIをすべて更新
             updateDynamicUI(data);
 
         } catch (error) {
-            console.error('Error:', error);
-            alert('タスク状態の更新に失敗しました。ページをリロードしてください。');
+            console.error('Error handling task completion:', error);
+            // エラー発生時はUIを元に戻すのではなく、ユーザーに通知する方が良い場合も
+            alert('タスク状態の更新に失敗しました。ページをリロードして最新の状態を確認してください。');
+            // 必要であれば、ここでUIを元に戻す処理を追加
         }
     }
 
-    // --- ▼▼▼ 改善点2: イベントリスナーのセットアップを簡潔に ▼▼▼ ---
+    // --- イベントリスナーのセットアップ ---
 
     /**
      * イベントリスナーをセットアップする（メインページとモーダルで共通）
@@ -233,93 +262,181 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function setupEventListeners(parentElement) {
         parentElement.addEventListener('click', (e) => {
+            // サブタスク完了トグル
             const toggle = e.target.closest('.complete-toggle');
             if (toggle) {
                 e.preventDefault();
                 e.stopPropagation();
-                const subtaskId = toggle.closest('li').dataset.subtaskId;
-                handleTaskCompletion(subtaskId);
+                const subtaskId = toggle.closest('li.sub-task')?.dataset.subtaskId;
+                if (subtaskId) {
+                    handleTaskCompletion(subtaskId);
+                }
+                return; // 他のクリックイベントと重複しないようにreturn
             }
+
+            // タスクタイトルクリック -> モーダル表示トリガー
+            // Note: Bootstrapがdata-bs-toggle属性で処理するので、ここでは何もしない
+            // もしカスタム動作が必要なら、ここに追加
+             const titleClick = e.target.closest('.task-title-clickable');
+             if(titleClick) {
+                 // Bootstrap's modal trigger handles this via data-bs-* attributes
+                 // console.log("Task title clicked, Bootstrap should handle modal.");
+             }
         });
     }
 
     // メインページのタスクリストにイベントリスナーを設定
-    setupEventListeners(document.getElementById('task-list-container'));
-    
-    // モーダル表示時にイベントリスナーを設定
+    const mainTaskListContainer = document.getElementById('task-list-container');
+    if(mainTaskListContainer) {
+        setupEventListeners(mainTaskListContainer);
+    }
+
+    // モーダル表示時の処理とイベントリスナー設定
     if (taskFocusModal) {
         taskFocusModal.addEventListener('show.bs.modal', event => {
-            const triggerElement = event.relatedTarget;
-            const taskTitle = triggerElement.getAttribute('data-task-title');
+            const triggerElement = event.relatedTarget; // モーダルを開いた要素
+            if (!triggerElement) return;
+
+            const taskTitle = triggerElement.dataset.taskTitle || "タスク詳細";
+            const subtasksJson = triggerElement.dataset.taskSubtasks;
             const modalTitle = taskFocusModal.querySelector('.modal-title');
             const modalBodyList = taskFocusModal.querySelector('#focus-subtask-list');
-            modalTitle.textContent = taskTitle;
-            
+
+            if (modalTitle) modalTitle.textContent = taskTitle;
+            if (!modalBodyList) return;
+
+            modalBodyList.innerHTML = ''; // Clear previous content
+
             try {
-                const subtasks = JSON.parse(triggerElement.getAttribute('data-task-subtasks'));
-                let listHtml = '';
+                const subtasks = JSON.parse(subtasksJson || '[]');
                 if (subtasks && subtasks.length > 0) {
                     subtasks.forEach(subtask => {
-                        listHtml += `
-                            <li class="list-group-item sub-task d-flex align-items-center ${subtask.is_completed ? 'completed' : ''}" data-subtask-id="${subtask.id}">
-                                <i class="bi ${subtask.is_completed ? 'bi-check-square-fill' : 'bi-square'} complete-toggle" style="cursor: pointer; margin-right: 10px;"></i>
-                                <span class="flex-grow-1">${subtask.content} (${subtask.grid_count}マス)</span>
-                            </li>`;
+                        const li = document.createElement('li');
+                        li.className = `list-group-item sub-task d-flex align-items-center ${subtask.is_completed ? 'completed' : ''}`;
+                        li.dataset.subtaskId = subtask.id;
+
+                        const icon = document.createElement('i');
+                        icon.className = `bi ${subtask.is_completed ? 'bi-check-square-fill' : 'bi-square'} complete-toggle`; // Add complete-toggle class
+                        icon.style.cursor = 'pointer';
+                        icon.style.marginRight = '10px';
+
+                        const span = document.createElement('span');
+                        span.className = 'flex-grow-1';
+                        span.textContent = `${subtask.content} (${subtask.grid_count}マス)`;
+
+                        li.appendChild(icon);
+                        li.appendChild(span);
+                        modalBodyList.appendChild(li);
                     });
+                     // モーダル内のリストにイベントリスナーを設定
+                    setupEventListeners(modalBodyList);
                 } else {
-                    listHtml = '<li class="list-group-item">サブタスクはありません。</li>';
+                    modalBodyList.innerHTML = '<li class="list-group-item">サブタスクはありません。</li>';
                 }
-                modalBodyList.innerHTML = listHtml;
-
-                // モーダル内のリストにもイベントリスナーを設定
-                setupEventListeners(modalBodyList);
-
             } catch(e) {
                 console.error("Failed to parse subtasks for modal:", e);
                 modalBodyList.innerHTML = '<li class="list-group-item text-danger">データの読み込みに失敗しました。</li>';
             }
         });
-        
-        // ▼▼▼ 改善点3: モーダルを閉じたときのリロード処理を削除 ▼▼▼
-        // これでモーダルを閉じてもリロードされなくなります。
+
+        // モーダルが完全に閉じた後の処理 (必要であれば)
+        taskFocusModal.addEventListener('hidden.bs.modal', () => {
+             // 以前のリロード処理は削除済み
+            // console.log("Modal closed");
+        });
     }
-    
+
     // --- 初期表示処理 ---
     const progressCircle = document.querySelector('.progress-circle');
     const progressText = document.querySelector('.progress-text');
     if (progressCircle && progressText) {
         const initialPercentage = parseFloat(progressCircle.dataset.progress || 0);
         progressText.textContent = `${Math.round(initialPercentage)}%`;
+        // 初回描画時にCSS変数を設定
         progressCircle.style.setProperty('--progress', `${initialPercentage}%`);
     }
 
+    // カレンダーと日付ナビゲーションの描画
     const calendarContainer = document.getElementById('calendar-container');
     const dateNavContainer = document.getElementById('date-nav-container');
-    const currentDate = new Date("{{ current_date.strftime('%Y-%m-%d') }}T00:00:00");
+    const currentDate = new Date("{{ current_date.strftime('%Y-%m-%d') }}T00:00:00"); // タイムゾーン問題を避けるためT00:00:00を追加
     const today = new Date("{{ today.strftime('%Y-%m-%d') }}T00:00:00");
     const taskCounts = {{ task_counts | tojson | safe }};
     let displayedMonthDate = new Date(currentDate);
 
     function renderCalendar() {
         if (!calendarContainer) return;
+        // generateCalendar関数は calendar.js で定義されていると仮定
         calendarContainer.innerHTML = generateCalendar(displayedMonthDate, currentDate, today, taskCounts);
-        document.getElementById('prev-month-btn').addEventListener('click', (e) => {
-            e.preventDefault();
-            displayedMonthDate.setMonth(displayedMonthDate.getMonth() - 1);
-            renderCalendar();
-        });
-        document.getElementById('next-month-btn').addEventListener('click', (e) => {
-            e.preventDefault();
-            displayedMonthDate.setMonth(displayedMonthDate.getMonth() + 1);
-            renderCalendar();
+
+        // イベントリスナーを再設定（カレンダーが再描画されるため）
+        const prevBtn = document.getElementById('prev-month-btn');
+        const nextBtn = document.getElementById('next-month-btn');
+        if(prevBtn) {
+            prevBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                displayedMonthDate.setMonth(displayedMonthDate.getMonth() - 1);
+                renderCalendar(); // カレンダーを再描画
+            });
+        }
+        if(nextBtn) {
+            nextBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                displayedMonthDate.setMonth(displayedMonthDate.getMonth() + 1);
+                renderCalendar(); // カレンダーを再描画
+            });
+        }
+    }
+
+     // 日付ナビゲーションの描画
+    if (dateNavContainer) {
+        // generateDateNav関数は calendar.js で定義されていると仮定
+        dateNavContainer.innerHTML = generateDateNav(currentDate);
+    }
+
+    renderCalendar(); // 初回カレンダー描画
+
+
+    // --- ローディング表示の処理 ---
+    const exportSheetForm = document.getElementById('export-sheet-form');
+    // スマホ用書き出しボタンにも対応
+    const exportSheetButtonMobile = document.querySelector('button[onclick*="export-sheet-form"]');
+
+    function showLoading() {
+        if(loadingOverlay) loadingOverlay.style.display = 'flex';
+    }
+
+    if (exportSheetForm) {
+        exportSheetForm.addEventListener('submit', showLoading);
+    }
+    if (exportSheetButtonMobile) {
+        exportSheetButtonMobile.addEventListener('click', showLoading);
+        // ボタンクリック後、少し遅れてフォーム送信が行われることを考慮
+        // 場合によっては、より確実な方法（例：API通信に変更）が必要になる可能性あり
+    }
+
+    // Excelインポートページへの遷移前にもローディングを表示したい場合 (リンククリック時)
+    const importLink = document.querySelector('a[href*="import_excel"]');
+    if (importLink) {
+        importLink.addEventListener('click', (e) => {
+             // 画面遷移の直前にローディングを表示
+             // ただし、遷移がキャンセルされた場合は非表示にするロジックが必要になる場合も
+             showLoading();
+             // 通常のリンク遷移は妨げない
         });
     }
 
-    if (dateNavContainer) {
-        dateNavContainer.innerHTML = generateDateNav(currentDate);
-    }
-    
-    renderCalendar();
+    // ページ読み込み完了時やブラウザバックで戻ってきたときに、
+    // ローディングが残らないように非表示にする (より堅牢な方法)
+    window.addEventListener('pageshow', (event) => {
+        // pageshowイベントは、ページが表示されるたび（初回読み込み、キャッシュからの復元含む）に発火
+        if (loadingOverlay && loadingOverlay.style.display !== 'none') {
+             // もしローディングが表示されたままなら隠す
+             loadingOverlay.style.display = 'none';
+        }
+    });
+
+
 });
 </script>
-{% endblock %}  
+{% endblock %}
