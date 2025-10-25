@@ -33,12 +33,14 @@
 
         <div class="col-lg-6">
             <h3>既存のテンプレート</h3>
+            <!-- オフライン保存されたテンプレートがここに挿入されます -->
             <div id="offline-templates-container"></div>
             {% for template in templates %}
                 <div class="card mb-3">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <span>{{ template.title }}</span>
-                        <form action="{{ url_for('delete_template', template_id=template.id) }}" method="post" onsubmit="return confirm('本当にこのテンプレートを削除しますか？');">
+                        <!-- ▼▼▼ 削除ボタンに back_url を引き継ぐ ▼▼▼ -->
+                        <form action="{{ url_for('delete_template', template_id=template.id, back_url=back_url or '') }}" method="post" onsubmit="return confirm('本当にこのテンプレートを削除しますか？');">
                             <button type="submit" class="btn btn-sm btn-outline-danger">削除</button>
                         </form>
                     </div>
@@ -60,7 +62,7 @@
 
 {% block scripts %}
 <script>
-    // --- ▼▼▼ 修正点: オフライン保存機能を追加 ▼▼▼
+    // --- ▼▼▼ オフライン保存機能を追加 ▼▼▼
     async function loadAndDisplayOfflineTemplates() {
         const container = document.getElementById('offline-templates-container');
         const noTemplatesMessage = document.getElementById('no-templates-message');
@@ -68,13 +70,16 @@
         try {
             const db = await openDB();
             const templates = await new Promise((resolve, reject) => {
-                const request = db.transaction('new_templates_outbox').objectStore('new_templates_outbox').getAll();
+                const request = db.transaction(NEW_TEMPLATE_STORE).objectStore(NEW_TEMPLATE_STORE).getAll();
                 request.onsuccess = () => resolve(request.result);
                 request.onerror = () => reject(request.error);
             });
 
             if (templates && templates.length > 0) {
                 if (noTemplatesMessage) noTemplatesMessage.style.display = 'none';
+                
+                // 既存のオフライン表示をクリア
+                container.innerHTML = '';
 
                 templates.forEach(template => {
                     const subtasksHtml = template.subtasks.map(sub => 
@@ -129,20 +134,29 @@
 
         saveButton.addEventListener('click', async () => {
             if (!form.reportValidity()) return;
+            showLoadingOverlay('テンプレートを保存中...');
 
             const templateData = {
                 title: document.getElementById('template_title').value.trim(),
                 subtasks: Array.from(document.querySelectorAll('.subtask-row')).map(row => ({
                     content: row.querySelector('input[name^="sub_content_"]').value.trim(),
                     grid_count: parseInt(row.querySelector('input[name^="grid_count_"]').value, 10)
-                }))
+                })).filter(s => s.content && s.grid_count > 0)
             };
             
+            if (templateData.subtasks.length === 0) {
+                alert("少なくとも1つの有効なサブタスクが必要です。");
+                hideLoadingOverlay();
+                return;
+            }
+
             const isOffline = localStorage.getItem('offlineMode') === 'true' || !navigator.onLine;
 
             if (isOffline) {
                 try {
                     await saveTemplateToOutbox(templateData);
+                    hideLoadingOverlay();
+                    alert("テンプレートをオフラインで保存しました。オンライン時に同期されます。");
                     // UIに即時反映
                     loadAndDisplayOfflineTemplates();
                     // フォームをリセット
@@ -150,10 +164,11 @@
                     container.innerHTML = '';
                     createSubtaskRow();
                 } catch(e) {
+                    hideLoadingOverlay();
                     alert('オフラインでの保存に失敗しました。');
                 }
             } else {
-                form.action = "{{ url_for('manage_templates') }}";
+                form.action = "{{ url_for('manage_templates', back_url=back_url or '') }}";
                 form.submit();
             }
         });
