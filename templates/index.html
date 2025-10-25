@@ -2,52 +2,6 @@
 
 {% block title %}Todoリスト{% endblock %}
 
-{% block head_extra %}
-<!-- ▼▼▼ 習慣カレンダー (FullCalendar) 用のCSS/JS ▼▼▼ -->
-<script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script>
-<style>
-    /* FullCalendarのダークモード対応 */
-    :root {
-        --fc-border-color: var(--dark-border);
-        --fc-daygrid-event-dot-width: 8px;
-        --fc-list-event-hover-bg-color: var(--dark-card-bg);
-    }
-    #habit-calendar .fc-toolbar-title { font-size: 1.25rem; }
-    #habit-calendar .fc-daygrid-day-number { font-size: 0.7rem; }
-    #habit-calendar .fc-daygrid-day { min-height: 4rem; } /* 日付セルの最小高さを確保 */
-    #habit-calendar .fc-day-today { background-color: rgba(161, 136, 45, 0.2); }
-    #habit-calendar .fc-event {
-        font-size: 0.7rem;
-        border: none;
-        padding: 2px 4px;
-        border-radius: 4px;
-        font-weight: bold;
-    }
-    #habit-calendar .fc-event-main {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-    }
-    #habit-calendar .fc-event-main-frame {
-        /* タイトルテキストを非表示にする（頭文字だけにするため） */
-        .fc-event-title { display: none; }
-    }
-    #habit-calendar .habit-initial-dot {
-        width: 1em;
-        height: 1em;
-        border-radius: 50%;
-        display: inline-block;
-        font-size: 0.8rem;
-        line-height: 1em;
-        text-align: center;
-        color: white;
-        flex-shrink: 0;
-    }
-</style>
-<!-- ▲▲▲ FullCalendar ▲▲▲ -->
-{% endblock %}
-
-
 {% block content %}
 <div class="row">
     <aside class="col-md-3 d-none d-md-block sidebar-left">
@@ -63,12 +17,8 @@
                 <a class="nav-link btn btn-info text-start mb-2" href="{{ url_for('manage_templates') }}">
                     <i class="bi bi-journal-album"></i> テンプレート管理
                 </a>
-<<<<<<< HEAD
                 {# スプレッドシート書き出しボタン。formタグでラップ #}
                 <form action="{{ url_for('export_to_sheet') }}" method="post" class="d-grid" id="export-sheet-form">
-=======
-                <form action="{{ url_for('export_to_sheet') }}" method="post" class="d-grid" id="export-form">
->>>>>>> 78017bd30574772b690a13283ba58ec096578f54
                     <button type="submit" class="btn btn-success text-start mb-2">
                         <i class="bi bi-file-earmark-spreadsheet-fill"></i> スプレッドシートへ書き出し
                     </button>
@@ -81,21 +31,6 @@
                     <i class="bi bi-gear-fill"></i> 設定
                 </a>
             </nav>
-
-            <!-- ▼▼▼ オフライン同期UI ▼▼▼ -->
-            <div class="offline-switch-container card mt-4">
-                <div class="card-body">
-                    <div class="form-check form-switch d-flex justify-content-between align-items-center">
-                        <label class="form-check-label" for="offline-mode-toggle"><i class="bi bi-wifi-off"></i> オフラインモード</label>
-                        <input class="form-check-input" type="checkbox" role="switch" id="offline-mode-toggle">
-                    </div>
-                    <button id="manual-sync-btn" class.btn btn-sm btn-outline-primary w-100 mt-2" disabled>
-                        <i class="bi bi-arrow-repeat"></i> 今すぐ同期
-                    </button>
-                    <small id="sync-status" class="text-muted d-block text-center mt-1"></small>
-                </div>
-            </div>
-            <!-- ▲▲▲ オフライン同期UI ▲▲▲ -->
         </div>
     </aside>
 
@@ -104,11 +39,7 @@
             <h1>Todoリスト</h1>
             <p class="lead">{{ current_date.strftime('%Y年%m月%d日') }}</p>
             <div class="date-nav" id="date-nav-container">
-<<<<<<< HEAD
                 {# calendar.jsによって動的に挿入される #}
-=======
-                <!-- calendar.jsによって挿入されます -->
->>>>>>> 78017bd30574772b690a13283ba58ec096578f54
             </div>
         </header>
 
@@ -134,39 +65,9 @@
         </div>
 
         <div class="task-list-container" id="task-list-container">
-<<<<<<< HEAD
             <h2>タスク一覧</h2>
             {% for master_task in master_tasks %}
                 {# visible_subtasks が存在する場合のみカードを表示 #}
-=======
-            <!-- ▼▼▼ 繰り返しタスクのセクション ▼▼▼ -->
-            {% if recurring_tasks %}
-            <h2 class="task-section-header">🔁 繰り返しタスク</h2>
-            {% for master_task in recurring_tasks %}
-                {% if master_task.visible_subtasks %}
-                <div class="card master-task-card mb-3 {% if master_task.all_completed %}all-completed{% endif %}" data-master-id="{{ master_task.id }}">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        {% include '_master_task_header.html' %}
-                    </div>
-                    <ul class="list-group list-group-flush">
-                        {% for subtask in master_task.visible_subtasks %}
-                            <li class="list-group-item sub-task d-flex align-items-center {% if subtask.is_completed %}completed{% endif %}" data-subtask-id="{{ subtask.id }}">
-                                <i class="bi {{ 'bi-check-square-fill' if subtask.is_completed else 'bi-square' }} complete-toggle" style="cursor: pointer; margin-right: 10px;"></i>
-                                <span class="flex-grow-1">
-                                    {{ subtask.content }} ({{ subtask.grid_count }}マス)
-                                </span>
-                            </li>
-                        {% endfor %}
-                    </ul>
-                </div>
-                {% endif %}
-            {% endfor %}
-            {% endif %}
-
-            <!-- ▼▼▼ 今日の通常タスクのセクション ▼▼▼ -->
-            <h2 class="task-section-header">🗓 今日のタスク</h2>
-            {% for master_task in daily_tasks %}
->>>>>>> 78017bd30574772b690a13283ba58ec096578f54
                 {% if master_task.visible_subtasks %}
                 <div class="card master-task-card mb-3 {% if master_task.all_completed_today %}all-completed{% endif %}" data-master-id="{{ master_task.id }}">
                     <div class="card-header d-flex justify-content-between align-items-center">
@@ -186,44 +87,20 @@
                 </div>
                 {% endif %}
             {% else %}
-<<<<<<< HEAD
                 {# 表示するタスクがない場合のメッセージ #}
-=======
-                <!-- 両方のリストが空の場合のメッセージ -->
-                {% if not recurring_tasks %}
->>>>>>> 78017bd30574772b690a13283ba58ec096578f54
                 <div class="card card-body text-center" id="no-task-message">
                     <p class="mb-0">この日に表示するタスクはありません。</p>
                 </div>
-                {% endif %}
             {% endfor %}
         </div>
     </main>
 
     <aside class="col-md-3 d-none d-md-block sidebar-right">
         <div class="sidebar-sticky">
-<<<<<<< HEAD
              {# カレンダー表示エリア #}
             <div class="card calendar-card mb-4" id="calendar-container">
                  {# calendar.jsによって動的に挿入される #}
             </div>
-=======
-            <!-- ▼▼▼ サイドバーカレンダー ▼▼▼ -->
-            <div class="card calendar-card mb-4" id="calendar-container">
-                <!-- calendar.jsによって挿入されます -->
-            </div>
-            
-            <!-- ▼▼▼ 習慣カレンダー ▼▼▼ -->
-            <div class="card habit-calendar-card mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0">習慣カレンダー</h5>
-                </div>
-                <div class="card-body p-2" id="habit-calendar-wrapper">
-                    <div id="habit-calendar"></div>
-                </div>
-            </div>
-            <!-- ▲▲▲ 習慣カレンダー ▲▲▲ -->
->>>>>>> 78017bd30574772b690a13283ba58ec096578f54
 
             <h2 class="sidebar-title">サマリー</h2>
             <div class="card summary-card text-center">
@@ -253,19 +130,12 @@
     <div class="container-fluid justify-content-around">
         <a href="{{ url_for('scratchpad', new='true') }}" class="btn btn-secondary scratchpad-btn-mobile" title="今からTodo"><i class="bi bi-pencil-square"></i></a>
         <a href="{{ url_for('add_or_edit_task', date_str=current_date.strftime('%Y-%m-%d')) }}" class="btn btn-primary" title="新しいタスクを追加"><i class="bi bi-plus-circle-fill"></i></a>
-<<<<<<< HEAD
         {# スプレッドシート書き出しボタン（スマホ用） #}
         <button type="button" class="btn btn-success" title="スプレッドシートへ書き出し" onclick="document.getElementById('export-sheet-form').submit();">
             <i class="bi bi-file-earmark-spreadsheet-fill"></i>
         </button>
         {# Excelインポートボタン（スマホ用） - メニューに移動 #}
         {# <a href="{{ url_for('import_excel') }}" class="btn btn-outline-secondary" title="Excelからインポート"><i class="bi bi-file-earmark-arrow-up"></i></a> #}
-=======
-        <form action="{{ url_for('export_to_sheet') }}" method="post" class="d-grid" id="export-form-mobile">
-            <button type="submit" class="btn btn-success" title="スプレッドシートへ書き出し"><i class="bi bi-file-earmark-spreadsheet-fill"></i></button>
-        </form>
-        <a href="{{ url_for('import_excel') }}" class="btn btn-outline-secondary" title="Excelからインポート"><i class="bi bi-file-earmark-arrow-up"></i></a>
->>>>>>> 78017bd30574772b690a13283ba58ec096578f54
     </div>
 </nav>
 
@@ -294,15 +164,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const CURRENT_DATE_STR = "{{ current_date.strftime('%Y-%m-%d') }}";
     const taskFocusModal = document.getElementById('taskFocusModal');
-<<<<<<< HEAD
     const loadingOverlay = document.getElementById('loading-overlay'); // ローディング画面要素を取得
 
     // --- UI更新とAPI通信の共通関数 ---
-=======
-    const isOffline = () => localStorage.getItem('offlineMode') === 'true' || !navigator.onLine;
-
-    // --- ▼▼▼ UI更新とAPI通信のロジックを共通関数に集約 ▼▼▼ ---
->>>>>>> 78017bd30574772b690a13283ba58ec096578f54
 
     /**
      * すべての動的なUI要素を最新データで更新する
@@ -334,66 +198,12 @@ document.addEventListener('DOMContentLoaded', () => {
             progressText.textContent = `${Math.round(percentage)}%`;
         }
     }
-    
-    /**
-     * 特定のタスクのUI（チェックボックスとカードヘッダ）をローカルで即時更新する
-     * @param {string} subtaskId - 対象のサブタスクID
-     * @param {boolean} isCompleted - 新しい完了状態
-     * @param {string} masterId - 親タスクID
-     */
-    function updateTaskUIOptimistically(subtaskId, isCompleted, masterId) {
-        // 1. メインページとモーダル内の両方のタスクリスト項目を更新
-        document.querySelectorAll(`.sub-task[data-subtask-id='${subtaskId}']`).forEach(li => {
-            const icon = li.querySelector('.complete-toggle, .bi');
-            li.classList.toggle('completed', isCompleted);
-            icon.classList.toggle('bi-check-square-fill', isCompleted);
-            icon.classList.toggle('bi-square', !isCompleted);
-        });
-
-        // 2. 親タスクのカード全体のスタイルを更新
-        const masterCard = document.querySelector(`.master-task-card[data-master-id='${masterId}']`);
-        if (masterCard) {
-            // ヘッダーはAPIのレスポンスを待つ
-            // all-completed の状態をローカルで判定
-            const allSubtasks = masterCard.querySelectorAll('.sub-task');
-            const completedSubtasks = masterCard.querySelectorAll('.sub-task.completed');
-            masterCard.classList.toggle('all-completed', allSubtasks.length === completedSubtasks.length);
-        }
-    }
-
 
     /**
      * サブタスクの完了状態をサーバーに送信し、UIを更新する
      * @param {string} subtaskId - 対象のサブタスクID
      */
     async function handleTaskCompletion(subtaskId) {
-        
-        // オフラインモードの場合
-        if (isOffline()) {
-            const taskItem = document.querySelector(`.sub-task[data-subtask-id='${subtaskId}']`);
-            if (!taskItem) return;
-
-            const isCompleted = !taskItem.classList.contains('completed');
-            const masterId = taskItem.closest('.master-task-card').dataset.masterId;
-            
-            try {
-                // UIを即時反映
-                updateTaskUIOptimistically(subtaskId, isCompleted, masterId);
-                // IndexedDBに保存
-                await saveTaskCompletionToOutbox(subtaskId, isCompleted);
-                updateSyncStatus();
-                // オフラインではグリッドやサマリーの正確な更新は難しいので、ここでは行わない
-                // (リロード時にサーバーデータと同期される)
-            } catch (e) {
-                console.error("Offline completion save failed:", e);
-                alert("オフラインでの状態保存に失敗しました。");
-                // UIを元に戻す
-                updateTaskUIOptimistically(subtaskId, !isCompleted, masterId);
-            }
-            return;
-        }
-
-        // オンラインモードの場合
         try {
             const response = await fetch(`/api/complete_subtask/${subtaskId}`, {
                 method: 'POST',
@@ -406,7 +216,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!data.success) throw new Error(data.error || "サーバーエラー");
 
             // --- UI更新処理 ---
-<<<<<<< HEAD
 
             // 1. メインページとモーダル内の両方のタスクリスト項目を更新
             document.querySelectorAll(`.sub-task[data-subtask-id='${subtaskId}']`).forEach(li => {
@@ -417,17 +226,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     icon.classList.toggle('bi-square', !data.is_completed);
                 }
             });
-=======
-            
-            // 1. メインページとモーダル内の両方のタスクリスト項目を更新 (APIの結果に基づき)
-            updateTaskUIOptimistically(subtaskId, data.is_completed, data.master_task_id);
->>>>>>> 78017bd30574772b690a13283ba58ec096578f54
 
-            // 2. 親タスクのヘッダーを更新
+            // 2. 親タスクのヘッダーとカード全体のスタイルを更新
             const masterCard = document.querySelector(`.master-task-card[data-master-id='${data.master_task_id}']`);
             if (masterCard) {
                 const header = masterCard.querySelector('.card-header');
-<<<<<<< HEAD
                 if (header) {
                      header.innerHTML = data.updated_header_html;
                      // ヘッダー内のクリックイベントリスナーを再設定する必要があるかもしれない
@@ -438,16 +241,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const visibleSubtasksInCard = masterCard.querySelectorAll('.list-group-item.sub-task');
                 const completedVisibleSubtasks = masterCard.querySelectorAll('.list-group-item.sub-task.completed');
                 masterCard.classList.toggle('all-completed', visibleSubtasksInCard.length > 0 && visibleSubtasksInCard.length === completedVisibleSubtasks.length);
-=======
-                header.innerHTML = data.updated_header_html;
->>>>>>> 78017bd30574772b690a13283ba58ec096578f54
             }
 
             // 3. グリッドやサマリーなどの動的UIをすべて更新
             updateDynamicUI(data);
-
-            // 4. 習慣カレンダーをリフレッシュ
-            habitCalendar.refetchEvents();
 
         } catch (error) {
             console.error('Error handling task completion:', error);
@@ -457,12 +254,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-<<<<<<< HEAD
     // --- イベントリスナーのセットアップ ---
-=======
-    // --- ▼▼▼ イベントリスナーのセットアップ ▼▼▼ ---
->>>>>>> 78017bd30574772b690a13283ba58ec096578f54
 
+    /**
+     * イベントリスナーをセットアップする（メインページとモーダルで共通）
+     * @param {HTMLElement} parentElement - イベントを設定する親要素
+     */
     function setupEventListeners(parentElement) {
         parentElement.addEventListener('click', (e) => {
             // サブタスク完了トグル
@@ -488,7 +285,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-<<<<<<< HEAD
     // メインページのタスクリストにイベントリスナーを設定
     const mainTaskListContainer = document.getElementById('task-list-container');
     if(mainTaskListContainer) {
@@ -496,10 +292,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // モーダル表示時の処理とイベントリスナー設定
-=======
-    setupEventListeners(document.getElementById('task-list-container'));
-    
->>>>>>> 78017bd30574772b690a13283ba58ec096578f54
     if (taskFocusModal) {
         taskFocusModal.addEventListener('show.bs.modal', event => {
             const triggerElement = event.relatedTarget; // モーダルを開いた要素
@@ -516,13 +308,7 @@ document.addEventListener('DOMContentLoaded', () => {
             modalBodyList.innerHTML = ''; // Clear previous content
 
             try {
-<<<<<<< HEAD
                 const subtasks = JSON.parse(subtasksJson || '[]');
-=======
-                // visible_subtasks_json をパース
-                const subtasks = JSON.parse(triggerElement.getAttribute('data-task-subtasks'));
-                let listHtml = '';
->>>>>>> 78017bd30574772b690a13283ba58ec096578f54
                 if (subtasks && subtasks.length > 0) {
                     subtasks.forEach(subtask => {
                         const li = document.createElement('li');
@@ -547,25 +333,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     modalBodyList.innerHTML = '<li class="list-group-item">サブタスクはありません。</li>';
                 }
-<<<<<<< HEAD
-=======
-                modalBodyList.innerHTML = listHtml;
-                setupEventListeners(modalBodyList);
->>>>>>> 78017bd30574772b690a13283ba58ec096578f54
             } catch(e) {
                 console.error("Failed to parse subtasks for modal:", e);
                 modalBodyList.innerHTML = '<li class="list-group-item text-danger">データの読み込みに失敗しました。</li>';
             }
         });
-<<<<<<< HEAD
 
         // モーダルが完全に閉じた後の処理 (必要であれば)
         taskFocusModal.addEventListener('hidden.bs.modal', () => {
              // 以前のリロード処理は削除済み
             // console.log("Modal closed");
         });
-=======
->>>>>>> 78017bd30574772b690a13283ba58ec096578f54
     }
 
     // --- 初期表示処理 ---
@@ -578,11 +356,7 @@ document.addEventListener('DOMContentLoaded', () => {
         progressCircle.style.setProperty('--progress', `${initialPercentage}%`);
     }
 
-<<<<<<< HEAD
     // カレンダーと日付ナビゲーションの描画
-=======
-    // サイドバーカレンダー
->>>>>>> 78017bd30574772b690a13283ba58ec096578f54
     const calendarContainer = document.getElementById('calendar-container');
     const dateNavContainer = document.getElementById('date-nav-container');
     const currentDate = new Date("{{ current_date.strftime('%Y-%m-%d') }}T00:00:00"); // タイムゾーン問題を避けるためT00:00:00を追加
@@ -590,11 +364,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const taskCounts = {{ task_counts | tojson | safe }};
     let displayedMonthDate = new Date(currentDate);
 
-    function renderSidebarCalendar() {
+    function renderCalendar() {
         if (!calendarContainer) return;
         // generateCalendar関数は calendar.js で定義されていると仮定
         calendarContainer.innerHTML = generateCalendar(displayedMonthDate, currentDate, today, taskCounts);
-<<<<<<< HEAD
 
         // イベントリスナーを再設定（カレンダーが再描画されるため）
         const prevBtn = document.getElementById('prev-month-btn');
@@ -663,186 +436,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-=======
-        document.getElementById('prev-month-btn').addEventListener('click', (e) => {
-            e.preventDefault();
-            displayedMonthDate.setMonth(displayedMonthDate.getMonth() - 1);
-            renderSidebarCalendar();
-        });
-        document.getElementById('next-month-btn').addEventListener('click', (e) => {
-            e.preventDefault();
-            displayedMonthDate.setMonth(displayedMonthDate.getMonth() + 1);
-            renderSidebarCalendar();
-        });
-    }
-
-    if (dateNavContainer) {
-        dateNavContainer.innerHTML = generateDateNav(currentDate);
-    }
-    
-    renderSidebarCalendar();
-
-    // --- ▼▼▼ 習慣カレンダー (FullCalendar) の初期化 ▼▼▼ ---
-    const habitCalendarEl = document.getElementById('habit-calendar');
-    let habitCalendar;
-    if (habitCalendarEl) {
-        habitCalendar = new FullCalendar.Calendar(habitCalendarEl, {
-            locale: 'ja',
-            initialView: 'dayGridMonth',
-            headerToolbar: {
-                left: 'prev',
-                center: 'title',
-                right: 'next'
-            },
-            height: 'auto', // 親要素の高さに合わせる
-            events: {
-                url: `/api/habit_calendar/${currentDate.getFullYear()}/${currentDate.getMonth() + 1}`,
-                failure: () => {
-                    alert('習慣カレンダーの読み込みに失敗しました。');
-                },
-                // APIから返されたデータをFullCalendarのイベント形式に変換
-                eventDataTransform: (eventData) => {
-                    const events = [];
-                    for (const dateStr in eventData) {
-                        eventData[dateStr].forEach(habit => {
-                            events.push({
-                                title: habit.title, // ツールチップ用
-                                start: dateStr,
-                                color: habit.color,
-                                extendedProps: {
-                                    initial: habit.initial
-                                }
-                            });
-                        });
-                    }
-                    return events;
-                }
-            },
-            // 月が変更されたらAPIを叩き直す
-            datesSet: (dateInfo) => {
-                const newDate = dateInfo.view.currentStart;
-                const year = newDate.getFullYear();
-                const month = newDate.getMonth() + 1;
-                habitCalendar.setOption('events', {
-                    url: `/api/habit_calendar/${year}/${month}`
-                });
-                habitCalendar.refetchEvents();
-            },
-            // イベント（習慣）のレンダリングをカスタマイズ
-            eventContent: (arg) => {
-                // 頭文字を表示する要素を作成
-                const initialDot = document.createElement('span');
-                initialDot.className = 'habit-initial-dot';
-                initialDot.style.backgroundColor = arg.event.backgroundColor;
-                initialDot.textContent = arg.event.extendedProps.initial;
-                
-                return { domNodes: [initialDot] };
-            },
-            eventDidMount: (info) => {
-                // ツールチップ（Bootstrap Popover）を追加
-                new bootstrap.Popover(info.el, {
-                    title: info.event.title,
-                    placement: 'top',
-                    trigger: 'hover',
-                    container: 'body',
-                    content: ' ', // コンテンツはタイトルのみ
-                    customClass: 'habit-popover'
-                });
-            }
-        });
-        habitCalendar.render();
-    }
-    
-    // --- ▼▼▼ オフライン同期UIのロジック ▼▼▼ ---
-    const offlineToggle = document.getElementById('offline-mode-toggle');
-    const syncButton = document.getElementById('manual-sync-btn');
-    const syncStatus = document.getElementById('sync-status');
-
-    // IndexedDBから未同期の件数を取得
-    async function checkOutbox() {
-        try {
-            const db = await openDB();
-            const stores = [NEW_TASK_STORE, SCRATCHPAD_STORE, NEW_TEMPLATE_STORE, COMPLETED_TASK_STORE];
-            let totalCount = 0;
-            for (const storeName of stores) {
-                const count = await new Promise((resolve, reject) => {
-                    const request = db.transaction(storeName).objectStore(storeName).count();
-                    request.onsuccess = () => resolve(request.result);
-                    request.onerror = () => reject(request.error);
-                });
-                totalCount += count;
-            }
-            return totalCount;
-        } catch (e) {
-            console.error("Failed to check outbox:", e);
-            return 0;
-        }
-    }
-
-    // 同期ステータスUIの更新
-    async function updateSyncStatus() {
-        const count = await checkOutbox();
-        if (count > 0) {
-            syncStatus.textContent = `${count}件が未同期です`;
-            syncButton.disabled = false;
-        } else {
-            syncStatus.textContent = '同期済み';
-            syncButton.disabled = true;
-        }
-    }
-
-    // オフラインモードトグルの設定
-    if (offlineToggle) {
-        offlineToggle.checked = localStorage.getItem('offlineMode') === 'true';
-        offlineToggle.addEventListener('change', () => {
-            localStorage.setItem('offlineMode', offlineToggle.checked);
-            if (!offlineToggle.checked && navigator.onLine) {
-                // オンラインに戻した時に同期を試みる
-                triggerSync();
-            }
-        });
-    }
-
-    // 同期ボタンの設定
-    if (syncButton) {
-        syncButton.addEventListener('click', triggerSync);
-    }
-    
-    // 即時同期のトリガー
-    function triggerSync() {
-        if (!navigator.onLine) {
-            alert("オフラインのため同期できません。");
-            return;
-        }
-        showLoadingOverlay('サーバーと同期中...');
-        syncButton.disabled = true;
-        syncStatus.textContent = '同期中...';
-
-        // Service Workerに同期を命令
-        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-             navigator.serviceWorker.controller.postMessage({ type: 'SYNC_NOW' });
-             // タイムアウト処理
-             setTimeout(() => {
-                 if (document.getElementById('loading-overlay').style.display === 'flex') {
-                     hideLoadingOverlay();
-                     alert("同期がタイムアウトしました。");
-                     updateSyncStatus();
-                 }
-             }, 10000); // 10秒
-        } else {
-             // SWがアクティブでない場合
-             alert("同期機能が準備できていません。ページをリロードしてください。");
-             hideLoadingOverlay();
-        }
-    }
-
-    // ページ読み込み時にステータスを更新
-    updateSyncStatus();
-    
-    // フォーム送信のローディング表示
-    document.getElementById('export-form')?.addEventListener('submit', () => showLoadingOverlay('スプレッドシートへ書き出し中...'));
-    document.getElementById('export-form-mobile')?.addEventListener('submit', () => showLoadingOverlay('スプレッドシートへ書き出し中...'));
->>>>>>> 78017bd30574772b690a13283ba58ec096578f54
 
 });
 </script>
