@@ -9,6 +9,13 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@300;400;700&display=swap" rel="stylesheet">
+    
+    <!-- ▼▼▼ PWA対応 ▼▼▼ -->
+    <link rel="manifest" href="{{ url_for('serve_manifest') }}">
+    <meta name="theme-color" content="#212529">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/icon-192x192.png') }}">
+    <!-- ▲▲▲ PWA対応 ▲▲▲ -->
+
     <style>
         :root { --dark-bg: #212529; --dark-border: #444; --text-color: #dee2e6; --primary-color: #6a5acd; }
         html, body { height: 100%; }
@@ -49,7 +56,39 @@
         <input type="text" id="new-scratch-task" placeholder="とりあえずやることを書く...">
         <button class="btn btn-add" id="add-scratch-btn">+</button>
     </div>
+
+    <!-- ▼▼▼ ローディング表示用のHTMLを追加 ▼▼▼ -->
+    <div id="loading-overlay" class="loading-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(33, 37, 41, 0.85); justify-content: center; align-items: center; flex-direction: column; z-index: 9999; backdrop-filter: blur(5px);">
+        <div class="spinner-border text-light" style="width: 3rem; height: 3rem;" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p id="loading-text" class="mt-3 text-light h5">処理中...</p>
+    </div>
+
+    <!-- ▼▼▼ PWA / オフライン対応スクリプト ▼▼▼ -->
     <script src="{{ url_for('static', filename='offline.js') }}"></script>
+    <script>
+        // --- Service Workerの登録 ---
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register("{{ url_for('serve_sw') }}")
+                    .then(registration => console.log('Service Worker registered.'))
+                    .catch(err => console.log('Service Worker registration failed: ', err));
+            });
+        }
+
+        // --- ローディング表示 ---
+        function showLoadingOverlay(message = '処理中...') {
+            const overlay = document.getElementById('loading-overlay');
+            const text = document.getElementById('loading-text');
+            if (overlay) {
+                if(text) text.textContent = message;
+                overlay.style.display = 'flex';
+            }
+        }
+    </script>
+    <!-- ▲▲▲ PWA / オフライン対応スクリプト ▲▲▲ -->
+
     <script>
     document.addEventListener('DOMContentLoaded', () => {
         const list = document.getElementById('scratch-list');
@@ -108,6 +147,7 @@
                                          .map(span => span.textContent);
             if (uncompletedTasks.length === 0) return;
 
+            showLoadingOverlay('タスクを書き出し中...');
             const isOffline = localStorage.getItem('offlineMode') === 'true' || !navigator.onLine;
 
             if (isOffline) {
@@ -179,4 +219,3 @@
     </script>
 </body>
 </html>
-

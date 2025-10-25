@@ -31,7 +31,7 @@
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" name="is_urgent" id="is_urgent" {% if master_task and master_task.is_urgent %}checked{% endif %}>
                                 <label class="form-check-label" for="is_urgent">
-                                    緊急のタスクとしてマークする
+                                    <i class="bi bi-exclamation-triangle-fill text-danger"></i> 緊急タスク
                                 </label>
                             </div>
                             <button type="button" id="save-as-template-btn" class="btn btn-outline-secondary btn-sm rounded-circle" title="現在の内容をテンプレートとして保存">
@@ -42,17 +42,50 @@
                             <label for="master_title" class="form-label">親タスクのタイトル</label>
                             <input type="text" class="form-control" id="master_title" name="master_title" value="{{ master_task.title if master_task else '' }}" required>
                         </div>
-                        <div class="mb-4">
-                            <label for="due_date" class="form-label">期限日</label>
-                            <input type="date" class="form-control" id="due_date" name="due_date" value="{{ (master_task.due_date if master_task else default_date).strftime('%Y-%m-%d') }}">
+                        
+                        <!-- ▼▼▼ 繰り返し設定セクション ▼▼▼ -->
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label for="due_date" class="form-label">期限日 / 開始日</label>
+                                <input type="date" class="form-control" id="due_date" name="due_date" value="{{ (master_task.due_date if master_task else default_date).strftime('%Y-%m-%d') }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="recurrence_type" class="form-label">繰り返し設定</label>
+                                <select class="form-select" id="recurrence_type" name="recurrence_type">
+                                    <option value="none" {% if not master_task or master_task.recurrence_type == 'none' %}selected{% endif %}>繰り返さない (通常タスク)</option>
+                                    <option value="daily" {% if master_task and master_task.recurrence_type == 'daily' %}selected{% endif %}>毎日</option>
+                                    <option value="weekly" {% if master_task and master_task.recurrence_type == 'weekly' %}selected{% endif %}>毎週</option>
+                                </select>
+                            </div>
                         </div>
+
+                        <div class="mb-3" id="recurrence-days-group" style="display: none;">
+                            <label class="form-label">繰り返す曜日</label>
+                            <div class="btn-group w-100" role="group" aria-label="曜日選択">
+                                {% set weekdays = [('0', '月'), ('1', '火'), ('2', '水'), ('3', '木'), ('4', '金'), ('5', '土'), ('6', '日')] %}
+                                {% set existing_days = master_task.recurrence_days if master_task and master_task.recurrence_days else '' %}
+                                {% for day_val, day_name in weekdays %}
+                                    <input type="checkbox" class="btn-check" name="recurrence_days" value="{{ day_val }}" id="day_{{ day_val }}" autocomplete="off" {% if day_val in existing_days %}checked{% endif %}>
+                                    <label class="btn btn-outline-secondary" for="day_{{ day_val }}">{{ day_name }}</label>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <div class="form-check mb-4">
+                            <input class="form-check-input" type="checkbox" name="is_habit" id="is_habit" {% if master_task and master_task.is_habit %}checked{% endif %}>
+                            <label class="form-check-label" for="is_habit">
+                                <i class="bi bi-calendar-check-fill text-info"></i> 習慣カレンダーに記録する
+                            </label>
+                        </div>
+                        <!-- ▲▲▲ 繰り返し設定セクション ▲▲▲ -->
+
                         <hr>
                         <h5 class="mb-3">サブタスク</h5>
                         <div id="subtasks-container"></div>
                         <div class="d-grid gap-2 d-md-flex justify-content-md-between mt-4">
                             <button type="button" id="add-subtask-btn" class="btn btn-secondary"><i class="bi bi-plus-circle"></i> サブタスクを追加</button>
                             <div>
-                                <a href="{{ url_for('todo_list') }}" class="btn btn-outline-secondary">キャンセル</a>
+                                <a href="{{ url_for('todo_list', date_str=default_date.strftime('%Y-%m-%d')) }}" class="btn btn-outline-secondary">キャンセル</a>
                                 <button type="button" id="save-task-btn" class="btn btn-primary">保存する</button>
                             </div>
                         </div>
@@ -123,16 +156,32 @@
             }
         });
 
+        // --- ▼▼▼ 繰り返し設定の表示切替 ▼▼▼ ---
+        const recurrenceTypeSelect = document.getElementById('recurrence_type');
+        const recurrenceDaysGroup = document.getElementById('recurrence-days-group');
+
+        const toggleRecurrenceDays = () => {
+            recurrenceDaysGroup.style.display = (recurrenceTypeSelect.value === 'weekly') ? 'block' : 'none';
+        };
+
+        recurrenceTypeSelect.addEventListener('change', toggleRecurrenceDays);
+        toggleRecurrenceDays(); // 初期表示
+        // --- ▲▲▲ 繰り返し設定の表示切替 ▲▲▲ ---
+
         const saveButton = document.getElementById('save-task-btn');
         const form = document.getElementById('task-form');
 
-        // --- ▼▼▼ 修正点: `async`キーワードを削除し、Promiseのthen/catchを使う ---
+        // --- ▼▼▼ オフライン保存ロジックを更新 ▼▼▼ ---
         saveButton.addEventListener('click', () => {
             if (!form.reportValidity()) return;
 
+            showLoadingOverlay('タスクを保存中...');
+
+            // 編集モードは常にオンラインである必要がある
             {% if master_task %}
                 if (!navigator.onLine) {
                     alert("タスクの編集はオンラインである必要があります。");
+                    hideLoadingOverlay();
                     return;
                 }
                 form.action = "{{ url_for('add_or_edit_task', master_id=master_task.id) }}";
@@ -140,32 +189,54 @@
                 return;
             {% endif %}
 
+            // --- 新規作成モード (オフライン対応) ---
             const isOffline = localStorage.getItem('offlineMode') === 'true' || !navigator.onLine;
+
+            const recurrenceType = document.getElementById('recurrence_type').value;
+            let recurrenceDays = null;
+            if (recurrenceType === 'weekly') {
+                recurrenceDays = Array.from(document.querySelectorAll('input[name="recurrence_days"]:checked')).map(cb => cb.value).join('');
+            }
 
             const taskData = {
                 title: document.getElementById('master_title').value.trim(),
                 due_date: document.getElementById('due_date').value,
                 is_urgent: document.getElementById('is_urgent').checked,
+                // --- 新しいフィールドを追加 ---
+                is_habit: document.getElementById('is_habit').checked,
+                recurrence_type: recurrenceType,
+                recurrence_days: recurrenceDays,
+                // ---
                 subtasks: Array.from(document.querySelectorAll('.subtask-row')).map(row => ({
                     content: row.querySelector('input[name^="sub_content_"]').value.trim(),
                     grid_count: parseInt(row.querySelector('input[name^="grid_count_"]').value, 10)
-                }))
+                })).filter(s => s.content && s.grid_count > 0) // 有効なサブタスクのみ
             };
+
+            if (taskData.subtasks.length === 0) {
+                alert("少なくとも1つの有効なサブタスクが必要です。");
+                hideLoadingOverlay();
+                return;
+            }
 
             if (isOffline) {
                 saveNewTaskToOutbox(taskData)
                     .then(() => {
-                        window.location.href = `/todo/${taskData.due_date}`;
+                        // 繰り返しタスクは今日へ、通常タスクは期限日へリダイレクト
+                        const redirectDate = (taskData.recurrence_type !== 'none') ? "{{ default_date.strftime('%Y-%m-%d') }}" : taskData.due_date;
+                        window.location.href = `/todo/${redirectDate}`;
                     })
                     .catch(error => {
                         console.error("Failed to save offline task:", error);
                         alert("オフラインでのタスク保存に失敗しました。");
+                        hideLoadingOverlay();
                     });
             } else {
                 form.action = "{{ url_for('add_or_edit_task') }}";
                 form.submit();
             }
         });
+        // --- ▲▲▲ オフライン保存ロジックを更新 ▲▲▲ ---
 
         const saveAsTemplateButton = document.getElementById('save-as-template-btn');
         saveAsTemplateButton.addEventListener('click', () => {
@@ -177,22 +248,25 @@
             const subtasks = Array.from(document.querySelectorAll('.subtask-row')).map(row => ({
                 content: row.querySelector('input[name^="sub_content_"]').value.trim(),
                 grid_count: parseInt(row.querySelector('input[name^="grid_count_"]').value, 10)
-            })).filter(s => s.content);
+            })).filter(s => s.content && s.grid_count > 0);
 
             if (subtasks.length === 0) {
-                alert("テンプレートとして保存するには、最低1つのサブタスクが必要です。");
+                alert("テンプレートとして保存するには、最低1つの有効なサブタスクが必要です。");
                 return;
             }
-
+            
+            showLoadingOverlay('テンプレートを保存中...');
             const templateData = { title, subtasks };
             const isOffline = localStorage.getItem('offlineMode') === 'true' || !navigator.onLine;
 
             if (isOffline) {
                 saveTemplateToOutbox(templateData)
                     .then(() => {
-                        alert("テンプレートをオフラインで保存しました。");
+                        hideLoadingOverlay();
+                        alert("テンプレートをオフラインで保存しました。オンライン時に同期されます。");
                     })
                     .catch(() => {
+                        hideLoadingOverlay();
                         alert("テンプレートのオフライン保存に失敗しました。");
                     });
             } else {
@@ -208,4 +282,3 @@
     });
 </script>
 {% endblock %}
-
