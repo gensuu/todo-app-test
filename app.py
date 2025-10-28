@@ -624,11 +624,32 @@ def add_or_edit_task(master_id=None):
     if request.method == 'POST':
         try:
             # --- Save as Template Logic ---
-            if 'save_as_template' in request.form:
+            # ★ 修正: 'save_as_template' ボタンの value をチェック ( 'true' が送られる)
+            if request.form.get('save_as_template') == 'true':
                 template_title = request.form.get('master_title', '').strip()
                 if not template_title:
                     flash("テンプレートとして保存するには、親タスクのタイトルが必要です。")
                     return redirect(request.url) # Reload the edit page
+
+                # ★★★ 修正点: フォームデータをsessionに保存 ★★★
+                session['temp_task_data'] = {
+                    'master_title': template_title,
+                    'due_date': request.form.get('due_date'),
+                    'is_urgent': 'is_urgent' in request.form,
+                    'is_habit': 'is_habit' in request.form,
+                    'recurrence_type': request.form.get('recurrence_type', 'none'),
+                    'recurrence_days': "".join(sorted(request.form.getlist('recurrence_days'))),
+                    'subtasks': []
+                }
+                subtask_count_for_session = 0
+                for i in range(1, 21): # Assuming max 20 subtasks from form
+                    sub_content = request.form.get(f'sub_content_{i}', '').strip()
+                    grid_count_str = request.form.get(f'grid_count_{i}', '0').strip()
+                    if sub_content and grid_count_str.isdigit() and int(grid_count_str) > 0:
+                        grid_count = int(grid_count_str)
+                        session['temp_task_data']['subtasks'].append({'content': sub_content, 'grid_count': grid_count})
+                        subtask_count_for_session += 1
+                # ★★★ ここまで ★★★
 
                 existing_template = TaskTemplate.query.filter_by(user_id=current_user.id, title=template_title).first()
                 if existing_template:
@@ -642,18 +663,17 @@ def add_or_edit_task(master_id=None):
                     app.logger.info(f"Creating new template '{template_title}' for user {current_user.id}.")
 
                 subtask_count = 0
-                for i in range(1, 21): # Assuming max 20 subtasks from form
-                    sub_content = request.form.get(f'sub_content_{i}', '').strip()
-                    grid_count_str = request.form.get(f'grid_count_{i}', '0').strip()
-
-                    if sub_content and grid_count_str.isdigit() and int(grid_count_str) > 0:
-                        grid_count = int(grid_count_str)
-                        db.session.add(SubtaskTemplate(template_id=template.id, content=sub_content, grid_count=grid_count))
-                        subtask_count += 1
+                # ★★★ 修正点: sessionデータからサブタスクを読み込む (すでにあるので流用) ★★★
+                for sub in session['temp_task_data']['subtasks']:
+                    db.session.add(SubtaskTemplate(template_id=template.id, content=sub['content'], grid_count=sub['grid_count']))
+                    subtask_count += 1
+                # ★★★ ここまで ★★★
 
                 if subtask_count == 0:
                     flash("サブタスクが1つもないため、テンプレートは保存されませんでした。")
                     db.session.rollback() # Rollback if no subtasks were added
+                    # ★★★ 修正点: sessionデータを削除 ★★★
+                    session.pop('temp_task_data', None)
                     return redirect(request.url) # Reload the edit page
 
                 db.session.commit()
@@ -739,6 +759,11 @@ def add_or_edit_task(master_id=None):
             return redirect(request.url)
 
     # --- GET Request Logic ---
+    
+    # ★★★ 修正点: sessionから一時データを復元 ★★★
+    session_data = session.pop('temp_task_data', None)
+    # ★★★ ここまで ★★★
+
     default_date = get_jst_today()
     # date_str_param を GET リクエストでも使う
     if date_str_param:
@@ -746,6 +771,15 @@ def add_or_edit_task(master_id=None):
             default_date = datetime.strptime(date_str_param, '%Y-%m-%d').date()
         except ValueError:
             pass # Ignore invalid date string
+    
+    # ★★★ 修正点: sessionデータがある場合、default_dateを上書き ★★★
+    if session_data and session_data.get('due_date'):
+         try:
+            default_date = datetime.strptime(session_data['due_date'], '%Y-%m-%d').date()
+         except (ValueError, TypeError):
+             pass # パース失敗したら元のdefault_dateを使う
+    # ★★★ ここまで ★★★
+
 
     templates = TaskTemplate.query.filter_by(user_id=current_user.id).all()
     templates_data = {
@@ -758,6 +792,9 @@ def add_or_edit_task(master_id=None):
     subtasks_for_template = []
     if master_task:
         subtasks_for_template = [{"content": sub.content, "grid_count": sub.grid_count} for sub in master_task.subtasks]
+    elif session_data: # ★★★ 修正点: master_taskがなくてもsessionデータからサブタスクを復元 ★★★
+        subtasks_for_template = session_data.get('subtasks', [])
+    # ★★★ ここまで ★★★
 
     return render_template(
         'edit_task.html',
@@ -765,7 +802,8 @@ def add_or_edit_task(master_id=None):
         existing_subtasks=subtasks_for_template,
         default_date=default_date,
         templates=templates,
-        templates_data=templates_data
+        templates_data=templates_data,
+        session_data=session_data # ★★★ 修正点: sessionデータをテンプレートに渡す ★★★
         # from_url は request.url または from_url 変数を使えば良いので、テンプレートに渡す必要は必ずしもない
     )
 
