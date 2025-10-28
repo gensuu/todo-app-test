@@ -1,0 +1,377 @@
+{% extends "layout.html" %}
+{% block title %}習慣達成カレンダー{% endblock %}
+
+{% block styles %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@700&family=Playpen+Sans:wght=600;700&display=swap" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid habit-calendar-page my-lg-4"> {# PCでは上下マージン少し #}
+    {# ★レイアウト変更: PCでは横並び、スマホでは縦積み #}
+    <div class="row">
+        {# カレンダー列 #}
+        <div class="col-lg-8 habit-calendar-col mb-4 mb-lg-0">
+            <div class="habit-calendar-card card">
+                <div class="card-header d-flex justify-content-between align-items-center p-2">
+                     <button id="prev-month" class="btn btn-outline-secondary btn-sm border-0">&lt;</button>
+                     <h2 id="calendar-title" class="mb-0 text-center fs-4 fs-md-3">YYYY年 MM月</h2>
+                     <button id="next-month" class="btn btn-outline-secondary btn-sm border-0">&gt;</button>
+                </div>
+                <div class="card-body p-0">
+                    <div id="calendar-grid" class="penco-calendar">
+                        <div class="weekdays">
+                            <span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span class="text-primary">SAT</span><span class="text-danger">SUN</span>
+                        </div>
+                        <div class="days">
+                            <!-- JSで日付が挿入されます -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+             <div class="text-center mt-4 d-lg-none"> {# スマホでのみ戻るボタンを表示 #}
+                <a href="{{ url_for('todo_list') }}" class="btn btn-outline-secondary">Todoリストへ戻る</a>
+            </div>
+        </div>
+
+        {# シール台紙列 #}
+        <div class="col-lg-4 sticker-palette-col">
+            <div class="sticker-palette card">
+                <div class="card-header">
+                    <h3 class="mb-0 fs-5"><i class="bi bi-journal-album"></i> 完了した習慣</h3>
+                    <small class="text-muted d-block">シールをドラッグ＆ドロップ！</small>
+                </div>
+                <div id="sticker-sheet" class="card-body d-flex flex-wrap gap-2 justify-content-center"> {# 中央寄せ #}
+                    <p id="no-habits-message" class="text-muted w-100 mb-0 text-center">今月完了した習慣はありません。</p>
+                    <!-- JSでシールが挿入されます -->
+                </div>
+                 <div class="card-footer text-center d-none d-lg-block"> {# PCでのみ戻るボタンを表示 #}
+                     <a href="{{ url_for('todo_list') }}" class="btn btn-sm btn-outline-secondary">Todoリストへ戻る</a>
+                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- シールテンプレート (JSで複製して使用) -->
+<template id="sticker-template">
+    <div class="sticker" draggable="true">
+        <span class="sticker-initial"></span>
+    </div>
+</template>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const calendarGrid = document.getElementById('calendar-grid').querySelector('.days');
+    const calendarTitle = document.getElementById('calendar-title');
+    const prevMonthBtn = document.getElementById('prev-month');
+    const nextMonthBtn = document.getElementById('next-month');
+    const stickerSheet = document.getElementById('sticker-sheet');
+    const stickerTemplate = document.getElementById('sticker-template');
+    const noHabitsMessage = document.getElementById('no-habits-message');
+
+    let currentDate = new Date();
+    currentDate.setDate(1); // 必ず月初に設定
+
+    // --- ドラッグ＆ドロップ関連 ---
+    let draggedStickerElement = null; // ドラッグ中の *一時的な* シール要素 (body直下)
+    let sourceStickerElement = null; // ドラッグ元の *台紙上の* シール要素
+    let initialOffsetX, initialOffsetY;
+
+    // --- ★シール状態の保存/読み込み (localStorage) ---
+    const STORAGE_KEY_PREFIX = 'habit_stickers_';
+    function getStorageKey(year, month) {
+        return `${STORAGE_KEY_PREFIX}${year}-${String(month + 1).padStart(2, '0')}`;
+    }
+
+    // { 'YYYY-MM-DD': ['Habit Title 1', ...], ... } の形式で保存
+    function savePlacedStickers(year, month, placedStickersMap) {
+        try {
+            localStorage.setItem(getStorageKey(year, month), JSON.stringify(placedStickersMap));
+        } catch (e) {
+            console.error("Error saving stickers to localStorage:", e);
+            alert("シールの状態を保存できませんでした。");
+        }
+    }
+
+    function loadPlacedStickers(year, month) {
+        try {
+            const data = localStorage.getItem(getStorageKey(year, month));
+            return data ? JSON.parse(data) : {};
+        } catch (e) {
+            console.error("Error loading stickers from localStorage:", e);
+            return {};
+        }
+    }
+
+    // --- APIから習慣データを取得 ---
+    async function fetchHabitData(year, month) {
+        try {
+            showLoadingOverlay('カレンダーデータを読込中...');
+            const response = await fetch(`/api/habit_calendar/${year}/${month + 1}`); // monthは1ベース
+            if (!response.ok) throw new Error('API Error');
+            const data = await response.json();
+            hideLoadingOverlay();
+            return data;
+        } catch (error) {
+            console.error("Error fetching habit data:", error);
+            alert('カレンダーデータの読み込みに失敗しました。');
+            hideLoadingOverlay();
+            return {};
+        }
+    }
+
+    // --- カレンダー描画 ---
+    async function renderCalendar(date) {
+        calendarGrid.innerHTML = '';
+        stickerSheet.innerHTML = ''; // 一旦クリア
+        noHabitsMessage.style.display = 'block';
+
+        const year = date.getFullYear();
+        const month = date.getMonth(); // 0-11
+        calendarTitle.textContent = `${year}年 ${month + 1}月`;
+
+        const firstDayOfMonth = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const dayOffset = (firstDayOfMonth === 0) ? 6 : firstDayOfMonth - 1;
+
+        // ★保存されたシール情報を読み込む
+        const placedStickersMap = loadPlacedStickers(year, month);
+        // APIから「今月完了した」習慣データを取得
+        const habitApiData = await fetchHabitData(year, month);
+
+        const habitsInMonth = new Map(); // 今月登場した習慣 { title: { initial: 'P', color: '#...', element: stickerSheetElement } }
+
+        // --- シール台紙の生成 ---
+        // APIデータから今月完了した習慣の種類をリストアップ
+        Object.values(habitApiData).flat().forEach(habit => {
+            if (!habitsInMonth.has(habit.title)) {
+                const stickerElement = createStickerElement(habit);
+                setupStickerDrag(stickerElement); // ドラッグイベント設定
+                stickerSheet.appendChild(stickerElement);
+                habitsInMonth.set(habit.title, { ...habit, element: stickerElement });
+                noHabitsMessage.style.display = 'none';
+            }
+        });
+
+        // --- カレンダーグリッド生成 ---
+        for (let i = 0; i < dayOffset; i++) {
+            calendarGrid.appendChild(createDayElement('', ['empty']));
+        }
+
+        const today = new Date();
+        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const dayElement = createDayElement(day);
+            const dateObj = new Date(year, month, day);
+            const weekday = dateObj.getDay();
+
+            if (dateStr === todayStr) dayElement.classList.add('today');
+            if (weekday === 6) dayElement.classList.add('saturday');
+            else if (weekday === 0) dayElement.classList.add('sunday');
+
+            const stickersContainer = document.createElement('div');
+            stickersContainer.className = 'stickers-container';
+            dayElement.appendChild(stickersContainer);
+            dayElement.dataset.date = dateStr;
+
+            // ★保存されたシールを配置
+            if (placedStickersMap[dateStr]) {
+                placedStickersMap[dateStr].forEach(habitTitle => {
+                    const habitInfo = habitsInMonth.get(habitTitle);
+                    if (habitInfo) {
+                        const placedSticker = createStickerElement(habitInfo);
+                        stickersContainer.appendChild(placedSticker);
+                        // シール台紙の対応するシールを「使用済み」にする
+                        if(habitInfo.element) habitInfo.element.classList.add('used');
+                    }
+                });
+            }
+
+            // ★貼るべき場所の「目印」を生成 (APIデータに基づき、まだ貼られていないもののみ)
+            if (habitApiData[dateStr]) {
+                 habitApiData[dateStr].forEach(habit => {
+                     const alreadyPlaced = placedStickersMap[dateStr]?.includes(habit.title);
+                     if (!alreadyPlaced) {
+                         const placeholder = createStickerElement(habit, ['placeholder']);
+                         stickersContainer.appendChild(placeholder);
+                     }
+                 });
+            }
+
+            setupDayDropTarget(dayElement, year, month, placedStickersMap, habitsInMonth); // ドロップイベント設定
+            calendarGrid.appendChild(dayElement);
+        }
+    }
+
+    // --- 日付要素を作成 ---
+    function createDayElement(dayNumber, classes = []) {
+        const dayDiv = document.createElement('div');
+        dayDiv.className = 'day';
+        dayDiv.classList.add(...classes);
+        dayDiv.innerHTML = `<span class="day-number">${dayNumber}</span>`;
+        return dayDiv;
+    }
+
+    // --- シール要素を作成 ---
+    function createStickerElement(habitInfo, classes = []) {
+        const stickerDiv = stickerTemplate.content.firstElementChild.cloneNode(true);
+        stickerDiv.classList.add(...classes);
+        stickerDiv.style.backgroundColor = habitInfo.color;
+        stickerDiv.querySelector('.sticker-initial').textContent = habitInfo.initial;
+        stickerDiv.dataset.title = habitInfo.title;
+        stickerDiv.title = habitInfo.title;
+        return stickerDiv;
+    }
+
+    // --- シールのドラッグイベントを設定 ---
+    function setupStickerDrag(stickerElement) {
+        stickerElement.addEventListener('dragstart', (e) => {
+            // ★使用済みシールはドラッグ不可
+            if (stickerElement.classList.contains('used')) {
+                e.preventDefault();
+                return;
+            }
+
+            sourceStickerElement = stickerElement; // ドラッグ元のシールを記憶
+            draggedStickerElement = stickerElement.cloneNode(true);
+            draggedStickerElement.style.position = 'absolute';
+            draggedStickerElement.style.zIndex = '1000';
+            draggedStickerElement.style.opacity = '0.7';
+            draggedStickerElement.classList.add('dragging');
+
+            const rect = stickerElement.getBoundingClientRect();
+            initialOffsetX = e.clientX - rect.left;
+            initialOffsetY = e.clientY - rect.top;
+
+            draggedStickerElement.style.left = `${e.clientX - initialOffsetX}px`;
+            draggedStickerElement.style.top = `${e.clientY - initialOffsetY}px`;
+            document.body.appendChild(draggedStickerElement);
+
+            e.dataTransfer.setData('text/plain', stickerElement.dataset.title);
+            e.dataTransfer.effectAllowed = 'copy'; // 見た目上はコピー
+
+            stickerElement.style.opacity = '0.5'; // ドラッグ元を薄く
+        });
+
+         // ドラッグ中にカーソル位置に追従 (よりスムーズに)
+         document.addEventListener('dragover', (e) => {
+             if (draggedStickerElement) {
+                 // Prevent default dragover behavior to allow drop
+                 e.preventDefault();
+                 draggedStickerElement.style.left = `${e.clientX - initialOffsetX}px`;
+                 draggedStickerElement.style.top = `${e.clientY - initialOffsetY}px`;
+             }
+         }, false); // Use capture phase for smoother updates
+
+        stickerElement.addEventListener('dragend', (e) => {
+            if (draggedStickerElement && draggedStickerElement.parentNode === document.body) {
+                 document.body.removeChild(draggedStickerElement);
+            }
+            draggedStickerElement = null;
+            if(sourceStickerElement) {
+                sourceStickerElement.style.opacity = '1'; // 元のシールの透明度を戻す
+                sourceStickerElement = null;
+            }
+            // ドラッグ終了後、全ての日の no-drop クラスを削除
+             document.querySelectorAll('.penco-calendar .day.no-drop').forEach(el => el.classList.remove('no-drop'));
+        });
+    }
+
+    // --- ★日付セルのドロップイベント設定 ---
+    function setupDayDropTarget(dayElement, year, month, placedStickersMap, habitsInMonth) {
+        dayElement.addEventListener('dragenter', (e) => {
+             e.preventDefault();
+             if (sourceStickerElement) {
+                 const targetDateStr = dayElement.dataset.date;
+                 const habitTitle = sourceStickerElement.dataset.title;
+                 const stickersContainer = dayElement.querySelector('.stickers-container');
+                 const hasPlaceholder = stickersContainer.querySelector(`.sticker.placeholder[data-title="${habitTitle}"]`);
+                 const alreadyPlaced = placedStickersMap[targetDateStr]?.includes(habitTitle);
+
+                 // ★貼れる場所かチェック
+                 if (hasPlaceholder && !alreadyPlaced) {
+                     dayElement.classList.add('drag-over');
+                     dayElement.classList.remove('no-drop');
+                 } else {
+                     dayElement.classList.add('no-drop'); // 貼れない場所
+                     dayElement.classList.remove('drag-over');
+                 }
+             }
+         });
+
+        dayElement.addEventListener('dragover', (e) => {
+            e.preventDefault(); // ドロップを許可
+            // dragenter でクラスは制御するのでここでは不要
+        });
+
+        dayElement.addEventListener('dragleave', (e) => {
+            // 関係ない要素に移動した時だけクラスを削除
+             if (!dayElement.contains(e.relatedTarget)) {
+                dayElement.classList.remove('drag-over', 'no-drop');
+            }
+        });
+
+        dayElement.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dayElement.classList.remove('drag-over', 'no-drop');
+
+            if (sourceStickerElement) { // sourceStickerElement を使う
+                const targetDateStr = dayElement.dataset.date;
+                const habitTitle = sourceStickerElement.dataset.title; // ドラッグ元の情報を取得
+                const stickersContainer = dayElement.querySelector('.stickers-container');
+                const placeholder = stickersContainer.querySelector(`.sticker.placeholder[data-title="${habitTitle}"]`);
+                const alreadyPlaced = placedStickersMap[targetDateStr]?.includes(habitTitle);
+
+                // ★貼れる場所か再確認してドロップ処理
+                if (placeholder && !alreadyPlaced) {
+                    const habitInfo = habitsInMonth.get(habitTitle);
+                    if(habitInfo) {
+                        const newSticker = createStickerElement(habitInfo);
+                        stickersContainer.appendChild(newSticker); // 日付に新しいシールを追加
+                        placeholder.remove(); // 目印を削除
+
+                        // ★localStorageに保存
+                        if (!placedStickersMap[targetDateStr]) {
+                            placedStickersMap[targetDateStr] = [];
+                        }
+                        placedStickersMap[targetDateStr].push(habitTitle);
+                        savePlacedStickers(year, month, placedStickersMap);
+
+                        // ★シール台紙の元のシールを使用済みに
+                        sourceStickerElement.classList.add('used');
+                    }
+
+                } else {
+                    console.log(`Cannot drop sticker "${habitTitle}" on ${targetDateStr}. Placeholder missing or already placed.`);
+                }
+            }
+             // draggedStickerElementの削除はdragendで行う
+        });
+    }
+
+
+    // --- 月移動ボタン ---
+    prevMonthBtn.addEventListener('click', () => {
+        currentDate.setMonth(currentDate.getMonth() - 1);
+        renderCalendar(currentDate);
+    });
+
+    nextMonthBtn.addEventListener('click', () => {
+        currentDate.setMonth(currentDate.getMonth() + 1);
+        renderCalendar(currentDate);
+    });
+
+    // --- 初期表示 ---
+    renderCalendar(currentDate);
+
+});
+</script>
+{% endblock %}
+

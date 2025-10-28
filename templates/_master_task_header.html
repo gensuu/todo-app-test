@@ -1,41 +1,40 @@
-<span class="task-title-clickable {% if master_task.is_urgent %}text-urgent{% endif %}" 
-      data-bs-toggle="modal" 
+<span class="task-title-clickable {% if master_task.is_urgent %}text-urgent{% endif %}"
+      data-bs-toggle="modal"
       data-bs-target="#taskFocusModal"
       data-task-title="{{ master_task.title }}"
       data-task-subtasks='{{ master_task.visible_subtasks_json | safe }}'>
-    
-    <!-- ▼▼▼ 繰り返しタスクの場合、アイコンを表示 ▼▼▼ -->
+
+    {# --- ▼▼▼ 繰り返しタスクのアイコン表示 ▼▼▼ --- #}
     {% if master_task.recurrence_type == 'daily' %}
         <i class="bi bi-arrow-repeat" title="毎日繰り返し"></i>
     {% elif master_task.recurrence_type == 'weekly' %}
         <i class="bi bi-calendar-week" title="毎週繰り返し"></i>
     {% endif %}
-    
+    {# --- ▲▲▲ アイコン表示 ▲▲▲ --- #}
+
     {{ master_task.title }}
-    
-    <!-- ▼▼▼ 完了日の表示ロジックを修正 ▼▼▼ -->
-    {% if master_task.all_completed and master_task.last_completion_date %}
-        {% set diff_days = (master_task.last_completion_date - master_task.due_date).days %}
-        <small class="text-muted">
-            (
-            <!-- 繰り返しタスクでない場合のみ期限日を表示 -->
-            {% if master_task.recurrence_type == 'none' %}
-                期限:{{ master_task.due_date.strftime('%m/%d') }} |
+
+    {# --- ▼▼▼ 日付表示ロジック修正 ▼▼▼ --- #}
+    <small class="text-muted">
+        (
+        {% if master_task.recurrence_type == 'none' %}
+            {# 通常タスク：期限日を表示 #}
+            期限:{{ master_task.due_date.strftime('%m/%d') }}
+            {# 全サブタスク完了済みの場合のみ完了日と遅延を表示 #}
+            {% if master_task.last_completion_date %}
+                | 完了:{{ master_task.last_completion_date.strftime('%m/%d') }}
+                {% set diff_days = (master_task.last_completion_date - master_task.due_date).days %}
+                {% if diff_days != 0 %}
+                    <span class="diff-days">({{ '%+d'|format(diff_days) }}日)</span>
+                {% endif %}
             {% endif %}
-            完了:{{ master_task.last_completion_date.strftime('%m/%d') }}
-            <!-- 繰り返しタスクでない場合のみ遅延日数を表示 -->
-            {% if master_task.recurrence_type == 'none' and diff_days != 0 %}
-                <span class="diff-days">({{ '%+d'|format(diff_days) }}日)</span>
-            {% endif %}
-            )
-        </small>
-    {% elif master_task.recurrence_type == 'none' %}
-        <!-- 未完了の通常タスクは期限日を表示 -->
-        <small class="text-muted">({{ master_task.due_date.strftime('%m/%d') }})</small>
-    {% else %}
-        <!-- 未完了の繰り返しタスクは開始日を表示 -->
-        <small class="text-muted">(開始日:{{ master_task.due_date.strftime('%m/%d') }})</small>
-    {% endif %}
-    <!-- ▲▲▲ 表示ロジックここまで ▲▲▲ -->
+        {% else %}
+            {# 繰り返しタスク：開始日を表示 #}
+            開始日:{{ master_task.due_date.strftime('%m/%d') }}
+        {% endif %}
+        )
+    </small>
+    {# --- ▲▲▲ 日付表示ロジック修正 ▲▲▲ --- #}
 </span>
+{# 編集ボタンのリンクに current_date を追加 #}
 <a href="{{ url_for('add_or_edit_task', master_id=master_task.id, date_str=current_date.strftime('%Y-%m-%d')) }}" class="btn btn-sm btn-outline-light">[編集]</a>
