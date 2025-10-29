@@ -181,10 +181,21 @@
         document.addEventListener('DOMContentLoaded', () => {
             const noiseBtn = document.getElementById('noise-toggle-btn');
             const noiseIcon = noiseBtn?.querySelector('i');
-            const volumeSlider = document.getElementById('noise-volume-slider'); // ★スライダー取得
+            const volumeSlider = document.getElementById('noise-volume-slider');
+            // ▼▼▼ 修正: localStorageキーを定義 ▼▼▼
+            const VOLUME_STORAGE_KEY = 'brownNoiseVolume';
             let noise = null;
             let isPlaying = false;
             let userInteractionDone = false;
+
+            // ▼▼▼ 修正: localStorageから音量を読み込み、スライダーに設定 ▼▼▼
+            if (volumeSlider) {
+                const savedVolume = localStorage.getItem(VOLUME_STORAGE_KEY);
+                if (savedVolume !== null) {
+                    volumeSlider.value = savedVolume; // HTMLのvalue属性より優先される
+                }
+            }
+            // ▲▲▲ 修正ここまで ▲▲▲
 
             async function initializeAudio() {
                 if (Tone.context.state === 'running' && noise) {
@@ -201,7 +212,7 @@
                     }
                     if (!noise) {
                         noise = new Tone.Noise("brown").toDestination();
-                        // ★音量をスライダーの初期値に設定
+                        // ★音量をスライダーの *現在の* 値（localStorageから復元済み）に設定
                         if(volumeSlider) noise.volume.value = parseFloat(volumeSlider.value); 
                         console.log('Brown noise generator initialized.');
                     }
@@ -248,11 +259,14 @@
 
                 // ★音量スライダーのイベントリスナー
                 volumeSlider.addEventListener('input', (e) => {
+                    const volumeDb = parseFloat(e.target.value);
                     if (noise) {
-                        const volumeDb = parseFloat(e.target.value);
                         noise.volume.value = volumeDb;
-                        console.log("Volume set to:", volumeDb, "dB");
                     }
+                    // ▼▼▼ 修正: 音量をlocalStorageに保存 ▼▼▼
+                    localStorage.setItem(VOLUME_STORAGE_KEY, volumeDb.toString());
+                    // ▲▲▲ 修正ここまで ▲▲▲
+                    console.log("Volume set to:", volumeDb, "dB");
                 });
             }
         });
@@ -272,4 +286,3 @@
 
 </body>
 </html>
-

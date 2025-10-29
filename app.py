@@ -318,13 +318,13 @@ def health_check():
 # --- PWA対応: sw.js と manifest.json を配信するルート ---
 @app.route('/sw.js')
 def serve_sw():
-    # ルートディレクトリの sw.js を配信
-    return send_file('sw.js', mimetype='application/javascript')
+    # ▼▼▼ 修正: '新しいフォルダー/' から配信 ▼▼▼
+    return send_file('新しいフォルダー/sw.js', mimetype='application/javascript')
 
 @app.route('/manifest.json')
 def serve_manifest():
-    # static ディレクトリの manifest.json を配信
-    return send_file('static/manifest.json', mimetype='application/manifest+json')
+    # ▼▼▼ 修正: '新しいフォルダー/' から配信 ▼▼▼
+    return send_file('新しいフォルダー/manifest.json', mimetype='application/manifest+json')
 
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -392,9 +392,10 @@ def login():
 
     return render_template('login.html')
 
-
+# ▼▼▼ 修正: デコレータを2行に分割 ▼▼▼
 @app.route("/logout")
 @login_required
+# ▲▲▲ 修正ここまで ▲▲▲
 def logout():
     app.logger.info(f"User {current_user.username} logging out.")
     logout_user()
@@ -496,7 +497,8 @@ def calendar_js():
 # --- PWA対応: static/offline.js を配信するルート ---
 @app.route('/static/offline.js')
 def serve_offline_js():
-    return send_file('static/offline.js', mimetype='application/javascript')
+    # ▼▼▼ 修正: '新しいフォルダー/' から配信 ▼▼▼
+    return send_file('新しいフォルダー/offline.js', mimetype='application/javascript')
 
 # --- 6. Todoアプリ本体のルート ---
 @app.route('/todo')
@@ -638,47 +640,29 @@ def add_or_edit_task(master_id=None):
         flash("権限がありません。")
         return redirect(url_for('todo_list'))
 
-    # Determine the return URL for the 'manage_templates' link
     # date_str をクエリパラメータから取得
     date_str_param = request.args.get('date_str', get_jst_today().strftime('%Y-%m-%d'))
     
-    # ★ 編集時/新規作成時で戻り先URLを正しく設定
+    # ▼▼▼ 修正: 戻り先URLを正しく設定 ▼▼▼
     if master_id:
         from_url = url_for('add_or_edit_task', master_id=master_id, date_str=date_str_param)
     else:
         from_url = url_for('add_or_edit_task', date_str=date_str_param)
+    # ▲▲▲ 修正ここまで ▲▲▲
 
 
     if request.method == 'POST':
         try:
             # --- Save as Template Logic ---
-            # ★ 修正: 'save_as_template' ボタンの value をチェック ( 'true' が送られる)
             if request.form.get('save_as_template') == 'true':
                 template_title = request.form.get('master_title', '').strip()
                 if not template_title:
                     flash("テンプレートとして保存するには、親タスクのタイトルが必要です。")
-                    # ★ 戻り先URL (back_url) を正しく引き継ぐ
                     return redirect(request.args.get('back_url') or from_url)
 
-                # ★★★ 修正点: フォームデータをsessionに保存 ★★★
-                session['temp_task_data'] = {
-                    'master_title': template_title,
-                    'due_date': request.form.get('due_date'),
-                    'is_urgent': 'is_urgent' in request.form,
-                    'is_habit': 'is_habit' in request.form,
-                    'recurrence_type': request.form.get('recurrence_type', 'none'),
-                    'recurrence_days': "".join(sorted(request.form.getlist('recurrence_days'))),
-                    'subtasks': []
-                }
-                subtask_count_for_session = 0
-                for i in range(1, 21): # Assuming max 20 subtasks from form
-                    sub_content = request.form.get(f'sub_content_{i}', '').strip()
-                    grid_count_str = request.form.get(f'grid_count_{i}', '0').strip()
-                    if sub_content and grid_count_str.isdigit() and int(grid_count_str) > 0:
-                        grid_count = int(grid_count_str)
-                        session['temp_task_data']['subtasks'].append({'content': sub_content, 'grid_count': grid_count})
-                        subtask_count_for_session += 1
-                # ★★★ ここまで ★★★
+                # ▼▼▼ 修正: sessionへの保存処理を削除 ▼▼▼
+                # session['temp_task_data'] = { ... }
+                # ▲▲▲ 修正ここまで ▲▲▲
 
                 existing_template = TaskTemplate.query.filter_by(user_id=current_user.id, title=template_title).first()
                 if existing_template:
@@ -692,23 +676,26 @@ def add_or_edit_task(master_id=None):
                     app.logger.info(f"Creating new template '{template_title}' for user {current_user.id}.")
 
                 subtask_count = 0
-                # ★★★ 修正点: sessionデータからサブタスクを読み込む (すでにあるので流用) ★★★
-                for sub in session['temp_task_data']['subtasks']:
-                    db.session.add(SubtaskTemplate(template_id=template.id, content=sub['content'], grid_count=sub['grid_count']))
-                    subtask_count += 1
-                # ★★★ ここまで ★★★
+                # ▼▼▼ 修正: sessionからではなく、直接フォームデータから読み込む ▼▼▼
+                for i in range(1, 21): # Assuming max 20 subtasks from form
+                    sub_content = request.form.get(f'sub_content_{i}', '').strip()
+                    grid_count_str = request.form.get(f'grid_count_{i}', '0').strip()
+                    if sub_content and grid_count_str.isdigit() and int(grid_count_str) > 0:
+                        grid_count = int(grid_count_str)
+                        db.session.add(SubtaskTemplate(template_id=template.id, content=sub_content, grid_count=grid_count))
+                        subtask_count += 1
+                # ▲▲▲ 修正ここまで ▲▲▲
 
                 if subtask_count == 0:
                     flash("サブタスクが1つもないため、テンプレートは保存されませんでした。")
                     db.session.rollback() # Rollback if no subtasks were added
-                    # ★★★ 修正点: sessionデータを削除 ★★★
+                    # ▼▼▼ 修正: session削除処理は不要だが念のため残す ▼▼▼
                     session.pop('temp_task_data', None)
+                    # ▲▲▲ 修正ここまで ▲▲▲
                     return redirect(request.args.get('back_url') or from_url)
 
                 db.session.commit()
                 flash(f"テンプレート「{template_title}」を保存しました。")
-                # manage_templates に戻り先URLを引き継ぐ
-                # ★ 修正: manage_templates ではなく、 back_url (元の編集画面) に戻る
                 return redirect(request.args.get('back_url') or from_url)
 
             # --- Save Task Logic ---
@@ -736,14 +723,10 @@ def add_or_edit_task(master_id=None):
                 master_task.is_habit = is_habit
                 master_task.recurrence_type = recurrence_type
                 master_task.recurrence_days = recurrence_days if recurrence_type == 'weekly' else None
-                # Editing a recurring task might need careful handling of existing completions,
-                # but for now, just update the properties. We also reset last_reset_date
-                # to ensure it appears correctly after edits if needed.
                 if recurrence_type != 'none':
                     master_task.last_reset_date = None #編集したらリセット日をクリア
 
                 app.logger.info(f"Updating master task ID {master_task.id} for user {current_user.id}.")
-                # Delete existing subtasks before adding new ones
                 SubTask.query.filter_by(master_id=master_task.id).delete()
             else: # Create new task
                 master_task = MasterTask(
@@ -778,11 +761,11 @@ def add_or_edit_task(master_id=None):
 
             db.session.commit()
             
-            # ★ session データをクリア
+            # ▼▼▼ 修正: session削除処理は不要だが念のため残す ▼▼▼
             session.pop('temp_task_data', None)
+            # ▲▲▲ 修正ここまで ▲▲▲
             
             flash("タスクを保存しました。")
-            # Redirect intelligently: recurring -> today, normal -> its due date
             redirect_date_str = get_jst_today().strftime('%Y-%m-%d') if recurrence_type != 'none' else master_task.due_date.strftime('%Y-%m-%d')
             return redirect(url_for('todo_list', date_str=redirect_date_str))
 
@@ -794,26 +777,22 @@ def add_or_edit_task(master_id=None):
 
     # --- GET Request Logic ---
     
-    # ★★★ 修正点: sessionから一時データを復元 ★★★
-    session_data = session.get('temp_task_data', None) # .pop() から .get() に変更
-    # ★★★ ここまで ★★★
+    # ▼▼▼ 修正: sessionからのデータ復元処理を削除 ▼▼▼
+    # session_data = session.get('temp_task_data', None)
+    session_data = None # 常に None に
+    # ▲▲▲ 修正ここまで ▲▲▲
 
     default_date = get_jst_today()
-    # date_str_param を GET リクエストでも使う
     if date_str_param:
         try:
             default_date = datetime.strptime(date_str_param, '%Y-%m-%d').date()
         except ValueError:
-            pass # Ignore invalid date string
+            pass
     
-    # ★★★ 修正点: sessionデータがある場合、default_dateを上書き ★★★
-    if session_data and session_data.get('due_date'):
-         try:
-            default_date = datetime.strptime(session_data['due_date'], '%Y-%m-%d').date()
-         except (ValueError, TypeError):
-             pass # パース失敗したら元のdefault_dateを使う
-    # ★★★ ここまで ★★★
-
+    # ▼▼▼ 修正: sessionデータによる default_date の上書き処理を削除 ▼▼▼
+    # if session_data and session_data.get('due_date'):
+    # ...
+    # ▲▲▲ 修正ここまで ▲▲▲
 
     templates = TaskTemplate.query.filter_by(user_id=current_user.id).all()
     templates_data = {
@@ -826,9 +805,10 @@ def add_or_edit_task(master_id=None):
     subtasks_for_template = []
     if master_task:
         subtasks_for_template = [{"content": sub.content, "grid_count": sub.grid_count} for sub in master_task.subtasks]
-    elif session_data: # ★★★ 修正点: master_taskがなくてもsessionデータからサブタスクを復元 ★★★
-        subtasks_for_template = session_data.get('subtasks', [])
-    # ★★★ ここまで ★★★
+    # ▼▼▼ 修正: sessionデータからのサブタスク復元処理を削除 ▼▼▼
+    # elif session_data:
+    #    subtasks_for_template = session_data.get('subtasks', [])
+    # ▲▲▲ 修正ここまで ▲▲▲
 
     return render_template(
         'edit_task.html',
@@ -837,7 +817,8 @@ def add_or_edit_task(master_id=None):
         default_date=default_date,
         templates=templates,
         templates_data=templates_data,
-        session_data=session_data # ★★★ 修正点: sessionデータをテンプレートに渡す ★★★
+        session_data=session_data, # 常にNoneが渡される
+        from_url=from_url # ▼▼▼ 修正: from_url をテンプレートに渡す ▼▼▼
     )
 
 # --- ★complete_subtask_api (繰り返し対応) ---
@@ -1669,3 +1650,4 @@ if __name__ == '__main__':
         app.logger.info(f"Starting Flask development server on port {port}.")
         # Enable reloader and debugger for development
         app.run(debug=True, host='0.0.0.0', port=port)
+

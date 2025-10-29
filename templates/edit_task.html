@@ -7,23 +7,24 @@
     <div class="row justify-content-center">
         <div class="col-lg-8">
             <div class="card edit-task-card">
-                <div class="card-header">
-                    <h2 class="mb-0">{% if master_task %}タスクの編集{% else %}新しいタスクの追加{% endif %}</h2>
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h2 class="mb-0 fs-4">{% if master_task %}タスクの編集{% else %}新しいタスクの追加{% endif %}</h2>
+                    {# --- ★ テンプレート管理へのリンク (from_url を back_url として渡す) --- #}
+                    <a href="{{ url_for('manage_templates', back_url=from_url) }}" class="btn btn-outline-info btn-sm">
+                        <i class="bi bi-journal-album"></i> テンプレート管理
+                    </a>
                 </div>
                 <div class="card-body">
-                    {# --- ★テンプレートセクション (編集時も表示) --- #}
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <!-- Group label and select, allow to grow -->
                         <div class="flex-grow-1 d-flex align-items-center me-3">
                             <label for="template_selector" class="form-label mb-0 me-2 flex-shrink-0 small text-muted">テンプレート:</label>
-                            <select class="form-select form-select-sm" id="template_selector" {% if master_task %}disabled{% endif %}> {# 編集時は読込不可に #}
+                            <select class="form-select form-select-sm" id="template_selector" {% if master_task %}disabled{% endif %}>
                                 <option value="">選択して読込...</option>
                                 {% for template in templates %}
                                     <option value="{{ template.id }}">{{ template.title }}</option>
                                 {% endfor %}
                             </select>
                         </div>
-                        <!-- Button, do not shrink -->
                         <button type="button" id="save-as-template-btn" class="btn btn-outline-secondary btn-sm flex-shrink-0" title="現在の内容をテンプレートとして保存">
                             <i class="bi bi-bookmark-plus"></i> ブックマークへ保存
                         </button>
@@ -31,27 +32,18 @@
                      <hr class="mb-4">
 
                     <form method="post" id="task-form">
-                        {# --- ★基本設定セクション (レイアウト変更) --- #}
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <label for="master_title" class="form-label mb-0">タスクタイトル:</label>
-                            
-                            {# ★緊急タスクボタン (トグルボタン・文字短縮) #}
                             <div>
                                 <input type="checkbox" class="btn-check" role="switch" name="is_urgent" id="is_urgent" autocomplete="off"
-                                       {% if master_task and master_task.is_urgent %}checked
-                                       {% elif session_data and session_data.is_urgent %}checked
-                                       {% endif %}>
+                                       {% if master_task and master_task.is_urgent %}checked{% endif %}>
                                 <label class="btn btn-outline-warning btn-sm" for="is_urgent">⚠️ 緊急</label>
                             </div>
                         </div>
-                        
-                        {# ★入力欄を下に配置 #}
                         <div class="mb-3">
-                            <input type="text" class="form-control" id="master_title" name="master_title" value="{{ master_task.title if master_task else (session_data.master_title if session_data else '') }}" required>
+                            <input type="text" class="form-control" id="master_title" name="master_title" value="{{ master_task.title if master_task else '' }}" required>
                         </div>
 
-
-                        {# --- ★詳細設定 (折りたたみ) --- #}
                         <div class="mb-3">
                              <button class="btn btn-sm btn-outline-secondary w-100" type="button" data-bs-toggle="collapse" data-bs-target="#collapseDetails" aria-expanded="false" aria-controls="collapseDetails">
                                  詳細設定 <i class="bi bi-chevron-down small"></i>
@@ -59,7 +51,6 @@
                          </div>
                          <div class="collapse" id="collapseDetails">
                              <div class="card card-body bg-dark border-secondary mb-3">
-                                 {# 期限日/開始日 と 繰り返し種別 #}
                                  <div class="row g-3 mb-3">
                                      <div class="col-md-6">
                                          <label for="due_date" class="form-label small">期限日 / 開始日</label>
@@ -68,37 +59,34 @@
                                      <div class="col-md-6">
                                          <label for="recurrence_type" class="form-label small">繰り返し設定</label>
                                          <select class="form-select form-select-sm" id="recurrence_type" name="recurrence_type">
-                                             {% set recurrence = master_task.recurrence_type if master_task else (session_data.recurrence_type if session_data else 'none') %}
+                                             {% set recurrence = master_task.recurrence_type if master_task else 'none' %}
                                              <option value="none" {% if recurrence == 'none' %}selected{% endif %}>繰り返さない</option>
                                              <option value="daily" {% if recurrence == 'daily' %}selected{% endif %}>毎日</option>
                                              <option value="weekly" {% if recurrence == 'weekly' %}selected{% endif %}>毎週</option>
                                          </select>
                                      </div>
                                  </div>
-                                 {# 繰り返す曜日 (毎週選択時のみ表示) #}
-                                 {% set recurrence_type_for_display = master_task.recurrence_type if master_task else (session_data.recurrence_type if session_data else 'none') %}
+                                 {% set recurrence_type_for_display = master_task.recurrence_type if master_task else 'none' %}
                                  <div class="mb-3" id="recurrence-days-group" style="display: {% if recurrence_type_for_display == 'weekly' %}block{% else %}none{% endif %};">
                                      <label class="form-label small mb-1">繰り返す曜日</label>
                                      <div class="btn-group w-100" role="group" aria-label="曜日選択">
                                          {% set weekdays = [('0', '月'), ('1', '火'), ('2', '水'), ('3', '木'), ('4', '金'), ('5', '土'), ('6', '日')] %}
-                                         {% set existing_days = (master_task.recurrence_days or '') if master_task else (session_data.recurrence_days if session_data else '') %}
+                                         {# --- ▼▼▼ 修正: `or ''` を追加して None の場合に空文字にする ▼▼▼ --- #}
+                                         {% set existing_days = (master_task.recurrence_days or '') if master_task else '' %}
+                                         {# --- ▲▲▲ 修正ここまで ▲▲▲ --- #}
                                          {% for day_val, day_name in weekdays %}
                                              <input type="checkbox" class="btn-check" name="recurrence_days" value="{{ day_val }}" id="day_{{ day_val }}" autocomplete="off" {% if day_val in existing_days %}checked{% endif %}>
                                              <label class="btn btn-sm btn-outline-secondary" for="day_{{ day_val }}">{{ day_name }}</label>
                                          {% endfor %}
                                      </div>
                                  </div>
-                                  {# 習慣カレンダー記録スイッチ #}
                                   <div class="form-check form-switch">
                                      <input class="form-check-input" type="checkbox" role="switch" name="is_habit" id="is_habit"
-                                            {% if master_task and master_task.is_habit %}checked
-                                            {% elif session_data and session_data.is_habit %}checked
-                                            {% endif %}>
+                                            {% if master_task and master_task.is_habit %}checked{% endif %}>
                                      <label class="form-check-label small" for="is_habit"><i class="bi bi-calendar-heart-fill text-info"></i> 習慣カレンダーに記録する</label>
                                  </div>
                              </div>
                          </div>
-                         {# --- ▲▲▲ 詳細設定ここまで ▲▲▲ --- #}
 
                         <hr>
                         <h5 class="mb-3 d-flex justify-content-between align-items-center">
@@ -120,21 +108,15 @@
 
     {# --- トースト通知エリア --- #}
     <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1100">
-      {# テンプレート保存成功トースト #}
       <div id="templateSaveToast" class="toast align-items-center text-bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
         <div class="d-flex">
-          <div class="toast-body">
-            <i class="bi bi-check-circle-fill me-2"></i> テンプレートを保存しました。
-          </div>
+          <div class="toast-body"><i class="bi bi-check-circle-fill me-2"></i> テンプレートを保存しました。</div>
           <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
         </div>
       </div>
-       {# テンプレート保存失敗トースト #}
        <div id="templateErrorToast" class="toast align-items-center text-bg-danger border-0" role="alert" aria-live="assertive" aria-atomic="true">
          <div class="d-flex">
-           <div class="toast-body">
-             <i class="bi bi-exclamation-triangle-fill me-2"></i> <span id="templateErrorText">エラーが発生しました。</span>
-           </div>
+           <div class="toast-body"><i class="bi bi-exclamation-triangle-fill me-2"></i> <span id="templateErrorText">エラーが発生しました。</span></div>
            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
          </div>
        </div>
@@ -183,13 +165,9 @@
         };
 
         const populateSubtasks = (tasks) => {
-            container.innerHTML = '';
-            subtaskCounter = 0;
-            if (tasks && tasks.length > 0) {
-                tasks.forEach(createSubtaskRow);
-            } else {
-                createSubtaskRow();
-            }
+            container.innerHTML = ''; subtaskCounter = 0;
+            if (tasks && tasks.length > 0) tasks.forEach(createSubtaskRow);
+            else createSubtaskRow();
         };
 
         const toggleRecurrenceDays = () => {
@@ -197,28 +175,16 @@
         };
 
         const saveTemplate = () => {
-            if (!form.reportValidity()) {
-                 alert("フォームの入力内容を確認してください。");
-                 return;
-            }
+            if (!form.reportValidity()) { alert("フォームの内容を確認してください。"); return; }
              const hiddenInput = document.createElement('input');
-             hiddenInput.type = 'hidden';
-             hiddenInput.name = 'save_as_template';
-             hiddenInput.value = 'true';
+             hiddenInput.type = 'hidden'; hiddenInput.name = 'save_as_template'; hiddenInput.value = 'true';
              form.appendChild(hiddenInput);
-             
              showLoadingOverlay('テンプレート保存中...');
              const currentUrl = new URL(window.location.href);
              const dateStr = currentUrl.searchParams.get('date_str') || defaultDateValue;
-
-             {% if master_task %}
-             const backUrl = "{{ url_for('add_or_edit_task', master_id=master_task.id) }}?date_str=" + dateStr;
-             {% else %}
-             const backUrl = "{{ url_for('add_or_edit_task') }}?date_str=" + dateStr;
-             {% endif %}
-
-             // ★ テンプレート保存時は manage_templates に飛ばさず、元の編集画面に戻る (app.py側で制御)
-             form.action = "{{ url_for('add_or_edit_task', master_id=master_task.id if master_task else None) }}?date_str=" + dateStr;
+             {% if master_task %} const backUrl = "{{ url_for('add_or_edit_task', master_id=master_task.id) }}?date_str=" + dateStr;
+             {% else %} const backUrl = "{{ url_for('add_or_edit_task') }}?date_str=" + dateStr; {% endif %}
+             form.action = "{{ url_for('add_or_edit_task', master_id=master_task.id if master_task else None) }}?date_str=" + dateStr + "&back_url=" + encodeURIComponent(backUrl); // back_url をアクションに追加
              form.submit();
          };
 
@@ -227,86 +193,34 @@
         toggleRecurrenceDays();
 
         // --- イベントリスナー設定 ---
-        if (templateSelector) {
-            templateSelector.addEventListener('change', (e) => {
-                const templateId = e.target.value;
-                const masterTitleInput = document.getElementById('master_title');
-                if (templateId && templatesData[templateId]) {
-                    const t = templatesData[templateId];
-                    masterTitleInput.value = t.title;
-                    populateSubtasks(t.subtasks);
-                }
-            });
-        }
-
-        addBtn.addEventListener('click', () => createSubtaskRow());
-        container.addEventListener('click', (e) => {
-            if (e.target.closest('.remove-subtask-btn')) {
-                e.target.closest('.subtask-row').remove();
-                if (container.children.length === 0) createSubtaskRow();
-            }
+        if (templateSelector) templateSelector.addEventListener('change', (e) => {
+            const templateId = e.target.value; const masterTitleInput = document.getElementById('master_title');
+            if (templateId && templatesData[templateId]) { const t = templatesData[templateId]; masterTitleInput.value = t.title; populateSubtasks(t.subtasks); }
         });
+        addBtn.addEventListener('click', () => createSubtaskRow());
+        container.addEventListener('click', (e) => { if (e.target.closest('.remove-subtask-btn')) { e.target.closest('.subtask-row').remove(); if (container.children.length === 0) createSubtaskRow(); } });
         recurrenceTypeSelect.addEventListener('change', toggleRecurrenceDays);
-        
         if (saveAsTemplateButton) saveAsTemplateButton.addEventListener('click', saveTemplate);
-
         saveButton.addEventListener('click', () => {
-            // 曜日選択バリデーション
             if (recurrenceTypeSelect.value === 'weekly') {
                  const checkedDays = form.querySelectorAll('input[name="recurrence_days"]:checked').length;
-                 if (checkedDays === 0) {
-                     alert("毎週繰り返す場合は曜日を選択してください。");
-                     recurrenceDaysGroup.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                     recurrenceDaysGroup.classList.add('border', 'border-danger');
-                     setTimeout(() => recurrenceDaysGroup.classList.remove('border', 'border-danger'), 2000);
-                     return;
-                 }
+                 if (checkedDays === 0) { alert("毎週繰り返す場合は曜日を選択。"); recurrenceDaysGroup.scrollIntoView({ behavior: 'smooth', block: 'center' }); recurrenceDaysGroup.classList.add('border', 'border-danger'); setTimeout(() => recurrenceDaysGroup.classList.remove('border', 'border-danger'), 2000); return; }
             }
             if (!form.reportValidity()) return;
             showLoadingOverlay('タスク保存中...');
-
-            const todayJS = new Date();
-            const yyyy = todayJS.getFullYear();
-            const mm = String(todayJS.getMonth() + 1).padStart(2, '0');
-            const dd = String(todayJS.getDate()).padStart(2, '0');
-            const todayStr = `${yyyy}-${mm}-${dd}`;
-
-            // 編集モードは常にオンラインPOST
-            {% if master_task %}
-                if (!navigator.onLine) { alert("編集はオンラインである必要があります。"); hideLoadingOverlay(); return; }
-                form.action = "{{ url_for('add_or_edit_task', master_id=master_task.id) }}";
-                form.submit(); return;
-            {% endif %}
-
-            // --- 新規作成: オフライン対応ロジック ---
+            const todayJS = new Date(); const yyyy = todayJS.getFullYear(); const mm = String(todayJS.getMonth() + 1).padStart(2, '0'); const dd = String(todayJS.getDate()).padStart(2, '0'); const todayStr = `${yyyy}-${mm}-${dd}`;
+            {% if master_task %} if (!navigator.onLine) { alert("編集はオンラインで。"); hideLoadingOverlay(); return; } form.action = "{{ url_for('add_or_edit_task', master_id=master_task.id) }}"; form.submit(); return; {% endif %}
             const isOffline = localStorage.getItem('offlineMode') === 'true' || !navigator.onLine;
-            const recurrenceType = document.getElementById('recurrence_type').value;
-            let recurrenceDays = null;
+            const recurrenceType = document.getElementById('recurrence_type').value; let recurrenceDays = null;
             if (recurrenceType === 'weekly') { recurrenceDays = Array.from(document.querySelectorAll('input[name="recurrence_days"]:checked')).map(cb => cb.value).join(''); }
             const taskData = {
-                title: document.getElementById('master_title').value.trim(),
-                due_date: document.getElementById('due_date').value,
-                is_urgent: document.getElementById('is_urgent').checked,
-                is_habit: document.getElementById('is_habit').checked,
-                recurrence_type: recurrenceType,
-                recurrence_days: recurrenceDays,
-                subtasks: Array.from(document.querySelectorAll('.subtask-row')).map(row => ({
-                    content: row.querySelector('input[name^="sub_content_"]').value.trim(),
-                    grid_count: parseInt(row.querySelector('input[name^="grid_count_"]').value, 10) || 0
-                })).filter(s => s.content && s.grid_count > 0)
+                title: document.getElementById('master_title').value.trim(), due_date: document.getElementById('due_date').value, is_urgent: document.getElementById('is_urgent').checked, is_habit: document.getElementById('is_habit').checked, recurrence_type: recurrenceType, recurrence_days: recurrenceDays,
+                subtasks: Array.from(document.querySelectorAll('.subtask-row')).map(row => ({ content: row.querySelector('input[name^="sub_content_"]').value.trim(), grid_count: parseInt(row.querySelector('input[name^="grid_count_"]').value, 10) || 0 })).filter(s => s.content && s.grid_count > 0)
             };
-            if (taskData.subtasks.length === 0) { alert("有効なサブタスクが最低1つ必要です。"); hideLoadingOverlay(); return; }
+            if (taskData.subtasks.length === 0) { alert("有効なサブタスクが最低1つ必要。"); hideLoadingOverlay(); return; }
             if (isOffline) {
-                saveNewTaskToOutbox(taskData)
-                    .then(() => {
-                        const redirectDate = (taskData.recurrence_type !== 'none') ? todayStr : taskData.due_date;
-                        window.location.href = `/todo/${redirectDate}`;
-                    })
-                    .catch(error => { console.error("Offline save error:", error); alert("オフライン保存失敗。"); hideLoadingOverlay(); });
-            } else { 
-                form.action = "{{ url_for('add_or_edit_task') }}"; 
-                form.submit(); 
-            }
+                saveNewTaskToOutbox(taskData).then(() => { const redirectDate = (taskData.recurrence_type !== 'none') ? todayStr : taskData.due_date; window.location.href = `/todo/${redirectDate}`; }).catch(error => { console.error("Offline save error:", error); alert("オフライン保存失敗。"); hideLoadingOverlay(); });
+            } else { form.action = "{{ url_for('add_or_edit_task') }}"; form.submit(); }
         });
     });
 </script>
