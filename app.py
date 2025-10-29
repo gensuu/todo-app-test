@@ -453,16 +453,38 @@ def settings():
 
         return redirect(url_for('settings')) # エラーがあっても設定ページにリダイレクト
 
-    # GET request logic
-    days_until_deletion = None # Currently cleanup is manual/not scheduled
-    sa_email = os.environ.get('SERVICE_ACCOUNT_EMAIL', '（管理者が設定してください）')
+    # --- ★ GET Request Logic (削除日計算の復活) ---
+    days_until_deletion = None
+    try:
+        cleanup_threshold_days = 32 # 32日
+        
+        # 最も古い完了済み(かつ非繰り返し)タスクの完了日を取得
+        oldest_completed_subtask = SubTask.query.join(MasterTask).filter(
+            MasterTask.user_id == current_user.id,
+            MasterTask.recurrence_type == 'none', # Only non-recurring
+            SubTask.is_completed == True,
+            SubTask.completion_date != None
+        ).order_by(SubTask.completion_date.asc()).first()
 
-    # Add force_password_change flag to template context
+        if oldest_completed_subtask:
+            today = get_jst_today()
+            oldest_completion_date = oldest_completed_subtask.completion_date
+            # 削除予定日を計算
+            deletion_date = oldest_completion_date + timedelta(days=cleanup_threshold_days)
+            # 今日から削除予定日までの日数を計算
+            days_until_deletion = (deletion_date - today).days
+        
+    except Exception as e:
+        app.logger.error(f"Error calculating days_until_deletion for user {current_user.id}: {e}", exc_info=True)
+        days_until_deletion = None # エラー時は None のまま
+    # --- ★ ロジックここまで ---
+
+    sa_email = os.environ.get('SERVICE_ACCOUNT_EMAIL', '（管理者が設定してください）')
     force_password_change = current_user.password_reset_required
 
     return render_template('settings.html',
                            sa_email=sa_email,
-                           days_until_deletion=days_until_deletion,
+                           days_until_deletion=days_until_deletion, # ★ 修正
                            force_password_change=force_password_change)
 
 
@@ -619,7 +641,13 @@ def add_or_edit_task(master_id=None):
     # Determine the return URL for the 'manage_templates' link
     # date_str をクエリパラメータから取得
     date_str_param = request.args.get('date_str', get_jst_today().strftime('%Y-%m-%d'))
-    from_url = url_for('add_or_edit_task', master_id=master_id, date_str=date_str_param) if master_id else url_for('add_or_edit_task', date_str=date_str_param)
+    
+    # ★ 編集時/新規作成時で戻り先URLを正しく設定
+    if master_id:
+        from_url = url_for('add_or_edit_task', master_id=master_id, date_str=date_str_param)
+    else:
+        from_url = url_for('add_or_edit_task', date_str=date_str_param)
+
 
     if request.method == 'POST':
         try:
@@ -629,7 +657,8 @@ def add_or_edit_task(master_id=None):
                 template_title = request.form.get('master_title', '').strip()
                 if not template_title:
                     flash("テンプレートとして保存するには、親タスクのタイトルが必要です。")
-                    return redirect(request.url) # Reload the edit page
+                    # ★ 戻り先URL (back_url) を正しく引き継ぐ
+                    return redirect(request.args.get('back_url') or from_url)
 
                 # ★★★ 修正点: フォームデータをsessionに保存 ★★★
                 session['temp_task_data'] = {
@@ -674,12 +703,13 @@ def add_or_edit_task(master_id=None):
                     db.session.rollback() # Rollback if no subtasks were added
                     # ★★★ 修正点: sessionデータを削除 ★★★
                     session.pop('temp_task_data', None)
-                    return redirect(request.url) # Reload the edit page
+                    return redirect(request.args.get('back_url') or from_url)
 
                 db.session.commit()
                 flash(f"テンプレート「{template_title}」を保存しました。")
                 # manage_templates に戻り先URLを引き継ぐ
-                return redirect(url_for('manage_templates', back_url=from_url))
+                # ★ 修正: manage_templates ではなく、 back_url (元の編集画面) に戻る
+                return redirect(request.args.get('back_url') or from_url)
 
             # --- Save Task Logic ---
             master_title = request.form.get('master_title', '').strip()
@@ -691,13 +721,13 @@ def add_or_edit_task(master_id=None):
 
             if not master_title:
                 flash("親タスクのタイトルを入力してください。")
-                return redirect(request.url)
+                return redirect(from_url) # from_url にリダイレクト
 
             try:
                 due_date_obj = datetime.strptime(due_date_str, '%Y-%m-%d').date() if due_date_str else get_jst_today()
             except ValueError:
                 flash("日付の形式が正しくありません。")
-                return redirect(request.url)
+                return redirect(from_url)
 
             if master_task: # Edit existing task
                 master_task.title = master_title
@@ -744,9 +774,13 @@ def add_or_edit_task(master_id=None):
             if not subtask_added:
                 flash("少なくとも1つの有効なサブタスクを入力してください。")
                 db.session.rollback() # Rollback if no subtasks added
-                return redirect(request.url)
+                return redirect(from_url)
 
             db.session.commit()
+            
+            # ★ session データをクリア
+            session.pop('temp_task_data', None)
+            
             flash("タスクを保存しました。")
             # Redirect intelligently: recurring -> today, normal -> its due date
             redirect_date_str = get_jst_today().strftime('%Y-%m-%d') if recurrence_type != 'none' else master_task.due_date.strftime('%Y-%m-%d')
@@ -756,12 +790,12 @@ def add_or_edit_task(master_id=None):
             db.session.rollback()
             app.logger.error(f"Error saving task for user {current_user.id}: {e}", exc_info=True)
             flash(f"タスクの保存中にエラーが発生しました: {e}")
-            return redirect(request.url)
+            return redirect(from_url)
 
     # --- GET Request Logic ---
     
     # ★★★ 修正点: sessionから一時データを復元 ★★★
-    session_data = session.pop('temp_task_data', None)
+    session_data = session.get('temp_task_data', None) # .pop() から .get() に変更
     # ★★★ ここまで ★★★
 
     default_date = get_jst_today()
@@ -804,7 +838,6 @@ def add_or_edit_task(master_id=None):
         templates=templates,
         templates_data=templates_data,
         session_data=session_data # ★★★ 修正点: sessionデータをテンプレートに渡す ★★★
-        # from_url は request.url または from_url 変数を使えば良いので、テンプレートに渡す必要は必ずしもない
     )
 
 # --- ★complete_subtask_api (繰り返し対応) ---
@@ -1129,59 +1162,16 @@ def import_excel():
 
     return render_template('import.html')
 
-# --- 他のルート (manage_templates, delete_template, scratchpad, export_scratchpad, export_to_sheet, admin routes...) は変更なし ---
-# --- (省略) ---
+# --- 他のルート (manage_templates, delete_template, scratchpad, export_scratchpad, export_to_sheet, admin routes...) ---
 @app.route('/templates', methods=['GET', 'POST'])
 @login_required
 def manage_templates():
     back_url = request.args.get('back_url') # Get potential back URL
 
     if request.method == 'POST':
-        title = request.form.get('template_title', '').strip()
-        if not title:
-            flash("テンプレート名を入力してください。")
-            return redirect(url_for('manage_templates', back_url=back_url)) # Preserve back_url
-
-        try:
-            # Check if template with the same title already exists
-            existing_template = TaskTemplate.query.filter_by(user_id=current_user.id, title=title).first()
-            if existing_template:
-                # Option 1: Update existing template (delete old subtasks)
-                template = existing_template
-                SubtaskTemplate.query.filter_by(template_id=template.id).delete()
-                app.logger.info(f"Updating template '{title}' for user {current_user.id}.")
-            else:
-                # Create new template
-                template = TaskTemplate(title=title, user_id=current_user.id)
-                db.session.add(template)
-                db.session.flush() # Need the ID
-                app.logger.info(f"Creating new template '{title}' for user {current_user.id}.")
-
-            subtask_added_count = 0
-            for i in range(1, 21): # Assuming max 20 subtasks from form
-                sub_content = request.form.get(f'sub_content_{i}', '').strip()
-                grid_count_str = request.form.get(f'grid_count_{i}', '0').strip()
-                if sub_content and grid_count_str.isdigit():
-                    grid_count = int(grid_count_str)
-                    if grid_count > 0:
-                        db.session.add(SubtaskTemplate(template_id=template.id, content=sub_content, grid_count=grid_count))
-                        subtask_added_count += 1
-
-            if subtask_added_count == 0:
-                flash("サブタスクが1つもないため、テンプレートは保存されませんでした。")
-                db.session.rollback() # Rollback if no subtasks
-            else:
-                db.session.commit()
-                flash(f"テンプレート「{title}」を保存しました。")
-
-            return redirect(url_for('manage_templates', back_url=back_url)) # Redirect back
-
-        except Exception as e:
-            db.session.rollback()
-            app.logger.error(f"Error saving template for user {current_user.id}: {e}", exc_info=True)
-            flash(f"テンプレートの保存中にエラーが発生しました: {e}")
-            return redirect(url_for('manage_templates', back_url=back_url))
-
+        # ★ テンプレート保存ロジックは add_or_edit_task に移動
+        flash("テンプレートの保存方法が変更されました。")
+        return redirect(url_for('manage_templates', back_url=back_url))
 
     # GET request
     templates = TaskTemplate.query.filter_by(user_id=current_user.id).order_by(TaskTemplate.title).all()
@@ -1489,6 +1479,7 @@ def export_user_data(user_id):
         ).order_by(
             MasterTask.due_date, MasterTask.id, SubTask.id
         ).all()
+
 
         if not all_tasks:
             flash(f"ユーザー「{user.username}」には書き出すタスクがありません。")

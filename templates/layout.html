@@ -13,21 +13,62 @@
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/icon-192x192.png') }}">
     {# --- 個別ページ用スタイルブロック --- #}
     {% block styles %}{% endblock %}
+
+    <style>
+        /* ★ノイズコントロール用スタイル */
+        .noise-control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        /* ★スライダーのスタイル調整 */
+        #noise-volume-slider {
+            width: 80px; /* スライダーの幅を固定 */
+            height: 5px; /* スライダーの高さ */
+            transition: opacity 0.3s ease-in-out;
+        }
+         /* ★スライダーつまみのスタイル (オプション) */
+        #noise-volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px; /* つまみの幅 */
+            height: 16px; /* つまみの高さ */
+            background: #6a5acd; /* プライマリカラー */
+            cursor: pointer;
+            border-radius: 50%;
+        }
+        #noise-volume-slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: #6a5acd;
+            cursor: pointer;
+            border-radius: 50%;
+        }
+    </style>
 </head>
 <body>
     {% if current_user.is_authenticated %}
     <nav class="navbar navbar-dark bg-dark fixed-top">
         <div class="container-fluid">
-             {# --- ★ブラウンノイズボタン追加 (アイコンは耳のような形?) --- #}
-            <button id="noise-toggle-btn" class="btn btn-outline-secondary btn-sm border-0 me-2 noise-button" title="ブラウンノイズ再生/停止">
-                 <i class="bi bi-earbuds"></i>
-                {# <i class="bi bi-volume-mute"></i> <!-- 初期状態 --> #}
-                {# <i class="bi bi-volume-up"></i> <!-- 再生中 --> #}
-            </button>
-            <a class="navbar-brand me-auto" href="{{ url_for('todo_list') }}">Todo Grid</a> {# me-auto で右寄せに #}
+            
+            {# --- ★ サイトタイトル (左端) --- #}
+            <a class="navbar-brand" href="{{ url_for('todo_list') }}">Todo Grid</a>
+
+            {# --- ★ブラウンノイズボタンとスライダー (中央・可変幅) --- #}
+            <div class="noise-control-group me-auto"> {# me-auto で残りのスペースを埋める #}
+                <button id="noise-toggle-btn" class="btn btn-outline-secondary btn-sm border-0 noise-button" title="ブラウンノイズ再生/停止">
+                     <i class="bi bi-earbuds"></i>
+                </button>
+                <input type="range" class="form-range" id="noise-volume-slider"
+                       min="-40" max="0" value="-20" step="1"
+                       style="display: none;" title="音量調節"> {# widthはstyleタグで指定 #}
+            </div>
+
+            {# --- ★ ハンバーガーメニュー (右端) --- #}
             <button class="navbar-toggler" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasNavbar" aria-controls="offcanvasNavbar">
                 <span class="navbar-toggler-icon"></span>
             </button>
+            
             <div class="offcanvas offcanvas-end text-bg-dark" tabindex="-1" id="offcanvasNavbar" aria-labelledby="offcanvasNavbarLabel">
                 <div class="offcanvas-header">
                     <h5 class="offcanvas-title" id="offcanvasNavbarLabel">ようこそ、<br>{{ current_user.username }} さん</h5>
@@ -35,10 +76,7 @@
                 </div>
                 <div class="offcanvas-body">
                     <ul class="navbar-nav justify-content-end flex-grow-1 pe-3">
-                        {# --- ★ナビゲーション項目整理 --- #}
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint == 'todo_list' %}active{% endif %}" href="{{ url_for('todo_list') }}"><i class="bi bi-list-check me-2"></i>Todoリスト</a>
-                        </li>
+                        {# --- ★ナビゲーション項目整理 (Todoリストを削除) --- #}
                         <li class="nav-item">
                             <a class="nav-link {% if request.endpoint == 'habit_calendar' %}active{% endif %}" href="{{ url_for('habit_calendar') }}"><i class="bi bi-calendar-heart-fill me-2"></i>習慣カレンダー</a>
                         </li>
@@ -51,7 +89,6 @@
                         <li class="nav-item">
                             <a class="nav-link {% if request.endpoint == 'manage_templates' %}active{% endif %}" href="{{ url_for('manage_templates') }}"><i class="bi bi-journal-album me-2"></i>テンプレート管理</a>
                         </li>
-                        {# ★Excelインポートをメニュー内に移動 #}
                         <li class="nav-item">
                              <a class="nav-link {% if request.endpoint == 'import_excel' %}active{% endif %}" href="{{ url_for('import_excel') }}"><i class="bi bi-file-earmark-arrow-up me-2"></i>Excelからインポート</a>
                         </li>
@@ -139,28 +176,24 @@
         }
     </script>
 
-    {# --- ★ブラウンノイズ再生スクリプト --- #}
+    {# --- ★ブラウンノイズ再生スクリプト (音量調節対応) --- #}
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const noiseBtn = document.getElementById('noise-toggle-btn');
             const noiseIcon = noiseBtn?.querySelector('i');
+            const volumeSlider = document.getElementById('noise-volume-slider'); // ★スライダー取得
             let noise = null;
             let isPlaying = false;
-            let userInteractionDone = false; // ユーザー操作があったか
+            let userInteractionDone = false;
 
-            // Tone.js の初期化 (ユーザーインタラクション後に開始)
             async function initializeAudio() {
-                // すでに初期化済み or 開始済みなら何もしない
                 if (Tone.context.state === 'running' && noise) {
                     return true;
                 }
-                // ユーザー操作なしでの自動再生を防ぐ
                 if (!userInteractionDone) {
                      console.log('AudioContext requires user interaction first.');
-                     // 必要ならユーザーに通知するUIを表示
                      return false;
                 }
-
                 try {
                     if (Tone.context.state !== 'running') {
                         await Tone.start();
@@ -168,51 +201,57 @@
                     }
                     if (!noise) {
                         noise = new Tone.Noise("brown").toDestination();
-                        noise.volume.value = -20; // デフォルト音量 (db)
+                        // ★音量をスライダーの初期値に設定
+                        if(volumeSlider) noise.volume.value = parseFloat(volumeSlider.value); 
                         console.log('Brown noise generator initialized.');
                     }
-                    return true; // 初期化成功
+                    return true;
                 } catch (error) {
                     console.error("Failed to initialize Tone.js:", error);
                     alert("音声の初期化に失敗しました。");
-                    return false; // 初期化失敗
+                    return false;
                 }
             }
+            
+            document.body.addEventListener('click', () => { userInteractionDone = true; }, { once: true });
 
-            // 何かボタン等がクリックされたらユーザー操作フラグを立てる
-            document.body.addEventListener('click', () => {
-                userInteractionDone = true;
-            }, { once: true }); // 一度だけ実行
-
-            if (noiseBtn && noiseIcon) {
+            if (noiseBtn && noiseIcon && volumeSlider) { // ★スライダーの存在も確認
                 noiseBtn.addEventListener('click', async () => {
-                    userInteractionDone = true; // ボタンクリックもユーザー操作
+                    userInteractionDone = true;
                     const initialized = await initializeAudio();
-                    if (!initialized) return; // 初期化失敗時は何もしない
+                    if (!initialized) return;
 
                     if (isPlaying) {
                         noise.stop();
-                        noiseIcon.classList.remove('bi-volume-up-fill'); // 再生中アイコン
-                        noiseIcon.classList.add('bi-earbuds'); // 初期アイコン
+                        noiseIcon.classList.remove('bi-volume-up-fill');
+                        noiseIcon.classList.add('bi-earbuds');
                         noiseBtn.classList.remove('active');
+                        volumeSlider.style.display = 'none'; // ★スライダーを隠す
                         isPlaying = false;
                         console.log("Brown noise stopped.");
                     } else {
                         try {
-                            // 再生前に再度Contextの状態を確認 (特にモバイルで重要)
-                            if (Tone.context.state !== 'running') {
-                                await Tone.start();
-                            }
+                            if (Tone.context.state !== 'running') { await Tone.start(); }
                             noise.start();
                             noiseIcon.classList.remove('bi-earbuds');
-                            noiseIcon.classList.add('bi-volume-up-fill'); // 再生中アイコンに変更
+                            noiseIcon.classList.add('bi-volume-up-fill');
                             noiseBtn.classList.add('active');
+                            volumeSlider.style.display = 'block'; // ★スライダーを表示
                             isPlaying = true;
                             console.log("Brown noise started.");
                         } catch(error) {
                              console.error("Failed to start noise:", error);
                              alert("ノイズの再生に失敗しました。");
                         }
+                    }
+                });
+
+                // ★音量スライダーのイベントリスナー
+                volumeSlider.addEventListener('input', (e) => {
+                    if (noise) {
+                        const volumeDb = parseFloat(e.target.value);
+                        noise.volume.value = volumeDb;
+                        console.log("Volume set to:", volumeDb, "dB");
                     }
                 });
             }

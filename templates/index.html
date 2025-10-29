@@ -175,16 +175,19 @@
 {# --- スマホ用フッターナビゲーション --- #}
 <nav class="d-md-none navbar fixed-bottom navbar-dark bg-dark">
     <div class="container-fluid justify-content-around">
-        {# ★ ボタンの順番と内容を調整 #}
-        <a href="{{ url_for('todo_list') }}" class="btn btn-secondary {% if request.endpoint == 'todo_list' %}active text-white{% endif %}" title="Todoリスト"><i class="bi bi-list-check"></i><span class="d-block">リスト</span></a>
-        <a href="{{ url_for('habit_calendar') }}" class="btn btn-warning {% if request.endpoint == 'habit_calendar' %}active text-white{% endif %}" title="習慣カレンダー"><i class="bi bi-calendar-heart-fill"></i><span class="d-block">習慣</span></a>
-        <a href="{{ url_for('add_or_edit_task', date_str=current_date.strftime('%Y-%m-%d')) }}" class="btn btn-primary" title="新しいタスクを追加"><i class="bi bi-plus-circle-fill"></i><span class="d-block">追加</span></a>
-        <a href="{{ url_for('scratchpad', new='true') }}" class="btn btn-secondary scratchpad-btn-mobile" title="今からTodo"><i class="bi bi-pencil-square"></i><span class="d-block">今から</span></a>
-        {# 書き出しボタンはオフキャンバスメニューへ移動を想定
-        <button type="button" class="btn btn-success" title="スプレッドシートへ書き出し" onclick="document.getElementById('export-sheet-form').submit();">
-            <i class="bi bi-file-earmark-spreadsheet-fill"></i><span class="d-block">書き出し</span>
-        </button>
-        #}
+        {# ★★★ flex-fill で幅を均等に & 「テンプレ」に短縮 ★★★ #}
+        <a href="{{ url_for('manage_templates') }}" class="btn btn-secondary flex-fill {% if request.endpoint == 'manage_templates' %}active text-white{% endif %}" title="テンプレート管理">
+            <i class="bi bi-journal-album"></i><span class="d-block">テンプレ</span>
+        </a>
+        <a href="{{ url_for('habit_calendar') }}" class="btn btn-warning flex-fill {% if request.endpoint == 'habit_calendar' %}active text-white{% endif %}" title="習慣カレンダー">
+            <i class="bi bi-calendar-heart-fill"></i><span class="d-block">習慣</span>
+        </a>
+        <a href="{{ url_for('add_or_edit_task', date_str=current_date.strftime('%Y-%m-%d')) }}" class="btn btn-primary flex-fill" title="新しいタスクを追加">
+            <i class="bi bi-plus-circle-fill"></i><span class="d-block">追加</span>
+        </a>
+        <a href="{{ url_for('scratchpad', new='true') }}" class="btn btn-secondary scratchpad-btn-mobile flex-fill" title="今からTodo">
+            <i class="bi bi-pencil-square"></i><span class="d-block">今から</span>
+        </a>
     </div>
 </nav>
 
@@ -207,7 +210,6 @@
 {% endblock %}
 
 {% block scripts %}
-{# --- スクリプト (変更なし) --- #}
 <script src="{{ url_for('static', filename='calendar.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
@@ -260,7 +262,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (header) header.innerHTML = data.updated_header_html;
                 const visibleSubtasksInCard = masterCard.querySelectorAll('.list-group-item.sub-task');
                 const completedVisibleSubtasks = masterCard.querySelectorAll('.list-group-item.sub-task.completed');
-                // ★ all-completed クラスの付け外しロジックを修正 (visibleSubtasksInCard.length > 0 のチェックを追加)
                 masterCard.classList.toggle('all-completed', visibleSubtasksInCard.length > 0 && visibleSubtasksInCard.length === completedVisibleSubtasks.length);
             }
             updateDynamicUI(data);
@@ -280,10 +281,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-    const dailyTaskListContainer = document.getElementById('daily-task-list-container');
-    const recurringTaskListContainer = document.getElementById('recurring-task-list-container');
-    if(dailyTaskListContainer) setupEventListeners(dailyTaskListContainer);
-    if(recurringTaskListContainer) setupEventListeners(recurringTaskListContainer);
+    // ★ タスクリストコンテナ全体でイベントリスナーを設定
+    const taskListContainer = document.getElementById('task-list-container');
+    if(taskListContainer) setupEventListeners(taskListContainer);
+
 
     if (taskFocusModal) {
         taskFocusModal.addEventListener('show.bs.modal', event => {
@@ -340,23 +341,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (dateNavContainer) dateNavContainer.innerHTML = generateDateNav(currentDate);
     renderCalendar();
     const exportSheetForm = document.getElementById('export-sheet-form');
-    const exportSheetButtonMobile = document.querySelector('button[onclick*="export-sheet-form"]');
-
-    // ★ hideLoadingOverlay をグローバルスコープで定義
-    window.hideLoadingOverlay = function() {
-        const overlay = document.getElementById('loading-overlay');
-        if (overlay) overlay.style.display = 'none';
-    }
-    // ★ showLoadingOverlay もグローバルスコープにするか、layout.htmlから呼び出すようにする
-    // 今回は layout.html に定義済みなので、ここでは不要
-
+    
     if (exportSheetForm) exportSheetForm.addEventListener('submit', ()=>showLoadingOverlay('書き出し中...'));
-    if (exportSheetButtonMobile) {
-        exportSheetButtonMobile.addEventListener('click', () => {
-            showLoadingOverlay('書き出し中...');
-            setTimeout(() => { document.getElementById('export-sheet-form').submit(); }, 100);
-        });
-    }
+    
     const importLink = document.querySelector('a[href*="import_excel"]');
     if (importLink) {
         importLink.addEventListener('click', (e) => {
@@ -364,7 +351,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     window.addEventListener('pageshow', (event) => {
-        // pageshow イベントはナビゲーション時に発火するのでここで隠すのが確実
         hideLoadingOverlay();
     });
 });
