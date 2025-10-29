@@ -13,7 +13,7 @@
                     <div class="alert alert-secondary">
                         <h5 class="alert-heading">データ形式</h5>
                         <p>以下の形式で作成したExcelファイル (.xlsx) をアップロードしてください。1行目はヘッダーとして無視されます。</p>
-                        
+
                         <strong>新規タスク作成用フォーマット</strong>
                         <ul class="list-group list-group-flush mb-3">
                             <li class="list-group-item"><strong>A列:</strong> 親タスクのタイトル</li>
@@ -25,13 +25,15 @@
                         <p class="small text-muted mb-0">※ 同じ親タスク名と期限日の行は、一つの親タスクとしてまとめられます。</p>
                     </div>
 
-                    <form method="post" enctype="multipart/form-data" id="import-form">
+                    {# フォーム (Blueprint名修正) #}
+                    <form method="post" enctype="multipart/form-data" id="import-form" action="{{ url_for('main.import_excel') }}">
                         <div class="mb-3">
                             <label for="excel_file" class="form-label">Excelファイルを選択</label>
                             <input class="form-control" type="file" id="excel_file" name="excel_file" accept=".xlsx" required>
                         </div>
                         <div class="d-flex justify-content-between">
-                            <a href="{{ url_for('todo_list') }}" class="btn btn-outline-secondary">キャンセル</a>
+                            {# キャンセルボタン (Blueprint名修正) #}
+                            <a href="{{ url_for('main.todo_list') }}" class="btn btn-outline-secondary">キャンセル</a>
                             <button type="submit" class="btn btn-primary">アップロード</button>
                         </div>
                     </form>
@@ -42,19 +44,8 @@
 </div>
 {% endblock %}
 
+{# ▼▼▼ インラインスクリプトを削除し、外部JSファイルを読み込むように変更 ▼▼▼ #}
 {% block scripts %}
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-    const importForm = document.getElementById('import-form');
-    if (importForm) {
-        importForm.addEventListener('submit', (e) => {
-            // ファイルが選択されているかチェック
-            const fileInput = document.getElementById('excel_file');
-            if (fileInput.files.length > 0) {
-                showLoadingOverlay('Excelファイルをインポート中...');
-            }
-        });
-    }
-});
-</script>
+<script src="{{ url_for('static', filename='js/import.js') }}"></script>
 {% endblock %}
+{# ▲▲▲ 修正ここまで ▲▲▲ #}

@@ -15,7 +15,6 @@
                             <th>権限</th>
                             <th>ユーザー削除</th>
                             <th>データ書き出し</th>
-                            <!-- ▼▼▼ パスワードリセット用の列を追加 ▼▼▼ -->
                             <th>パスワードリセット</th>
                         </tr>
                     </thead>
@@ -27,20 +26,22 @@
                             <td>{% if user.is_admin %}<strong>アドミン</strong>{% else %}一般{% endif %}</td>
                             <td>
                                 {% if not user.is_admin and user.id != current_user.id %}
-                                    <form action="{{ url_for('delete_user', user_id=user.id) }}" method="post" onsubmit="return confirm('本当にユーザー「{{ user.username }}」を削除しますか？\nこの操作は元に戻せません。');">
+                                    {# 削除フォーム (Blueprint名修正) #}
+                                    <form action="{{ url_for('admin.delete_user', user_id=user.id) }}" method="post" onsubmit="return confirm('本当にユーザー「{{ user.username }}」を削除しますか？\nこの操作は元に戻せません。');">
                                         <button type="submit" class="btn btn-sm btn-danger">削除</button>
                                     </form>
                                 {% endif %}
                             </td>
                             <td>
-                                <form action="{{ url_for('export_user_data', user_id=user.id) }}" method="post">
+                                {# 書き出しフォーム (Blueprint名修正) #}
+                                <form action="{{ url_for('admin.export_user_data', user_id=user.id) }}" method="post">
                                     <button type="submit" class="btn btn-sm btn-outline-success">Excel</button>
                                 </form>
                             </td>
-                            <!-- ▼▼▼ パスワードリセット用のボタンを追加 ▼▼▼ -->
                             <td>
                                 {% if not user.is_admin %}
-                                    <form action="{{ url_for('reset_password', user_id=user.id) }}" method="post" onsubmit="return confirm('ユーザー「{{ user.username }}」のパスワードをリセットし、新しい一時パスワードを発行しますか？');">
+                                    {# リセットフォーム (Blueprint名修正) #}
+                                    <form action="{{ url_for('admin.reset_password', user_id=user.id) }}" method="post" onsubmit="return confirm('ユーザー「{{ user.username }}」のパスワードをリセットし、新しい一時パスワードを発行しますか？');">
                                         <button type="submit" class="btn btn-sm btn-warning">リセット</button>
                                     </form>
                                 {% endif %}
@@ -53,7 +54,12 @@
         </div>
     </div>
     <div class="text-center mt-4">
-        <a href="{{ url_for('todo_list') }}" class="btn btn-outline-secondary">戻る</a>
+        {# 戻るボタン (Blueprint名修正) #}
+        <a href="{{ url_for('main.todo_list') }}" class="btn btn-outline-secondary">戻る</a>
     </div>
 </div>
+{% endblock %}
+
+{# このページには現在 JavaScript がないため scripts ブロックは空 #}
+{% block scripts %}
 {% endblock %}

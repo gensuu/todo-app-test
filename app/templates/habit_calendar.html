@@ -1,0 +1,76 @@
+{% extends "layout.html" %}
+{% block title %}習慣達成カレンダー{% endblock %}
+
+{% block styles %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@700&family=Playpen+Sans:wght=600;700&display=swap" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid habit-calendar-page my-lg-4">
+    <div class="row">
+        {# カレンダー列 #}
+        <div class="col-lg-8 habit-calendar-col mb-4 mb-lg-0">
+            <div class="habit-calendar-card card">
+                <div class="card-header d-flex justify-content-between align-items-center p-2">
+                     <button id="prev-month" class="btn btn-outline-secondary btn-sm border-0">&lt;</button>
+                     <h2 id="calendar-title" class="mb-0 text-center fs-4 fs-md-3">YYYY年 MM月</h2>
+                     <button id="next-month" class="btn btn-outline-secondary btn-sm border-0">&gt;</button>
+                </div>
+                <div class="card-body p-0">
+                    <div id="calendar-grid" class="penco-calendar">
+                        <div class="weekdays">
+                            <span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span class="text-primary">SAT</span><span class="text-danger">SUN</span>
+                        </div>
+                        <div class="days">
+                            <!-- JSで日付が挿入されます -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+             {# 戻るボタン (スマホのみ, Blueprint名修正) #}
+             <div class="text-center mt-4 d-lg-none">
+                <a href="{{ url_for('main.todo_list') }}" class="btn btn-outline-secondary">Todoリストへ戻る</a>
+            </div>
+        </div>
+
+        {# シール台紙列 #}
+        <div class="col-lg-4 sticker-palette-col">
+            <div class="sticker-palette card">
+                <div class="card-header">
+                    <h3 class="mb-0 fs-5"><i class="bi bi-journal-album"></i> 完了した習慣</h3>
+                    <small class="text-muted d-block">シールをドラッグ＆ドロップ！</small>
+                </div>
+                <div id="sticker-sheet" class="card-body d-flex flex-wrap gap-2 justify-content-center">
+                    <p id="no-habits-message" class="text-muted w-100 mb-0 text-center">今月完了した習慣はありません。</p>
+                    <!-- JSでシールが挿入されます -->
+                </div>
+                 {# 戻るボタン (PCのみ, Blueprint名修正) #}
+                 <div class="card-footer text-center d-none d-lg-block">
+                     <a href="{{ url_for('main.todo_list') }}" class="btn btn-sm btn-outline-secondary">Todoリストへ戻る</a>
+                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- シールテンプレート (JSで複製して使用) -->
+<template id="sticker-template">
+    <div class="sticker" draggable="true">
+        <span class="sticker-initial"></span>
+    </div>
+</template>
+{% endblock %}
+
+{# ▼▼▼ インラインスクリプトを削除し、外部JSファイルを読み込むように変更 ▼▼▼ #}
+{% block scripts %}
+{# JavaScript に API ベース URL を渡すためのコンテナ #}
+<div id="habit-calendar-data-container"
+     data-api-url-base="{{ url_for('main.habit_calendar_data', year=0, month=0)[:-4] }}" {# ベースURL末尾の'/0/0'を削除 #}
+     style="display: none;"></div>
+
+{# 分離した habit_calendar.js を読み込む #}
+<script src="{{ url_for('static', filename='js/habit_calendar.js') }}"></script>
+{% endblock %}
+{# ▲▲▲ 修正ここまで ▲▲▲ #}

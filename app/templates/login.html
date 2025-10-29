@@ -1,6 +1,5 @@
 {% extends "layout.html" %}
 
-{# ▼▼▼ titleブロックはここに1つだけ記述します ▼▼▼ #}
 {% block title %}ログイン{% endblock %}
 
 {% block content %}
@@ -10,16 +9,13 @@
             <div class="card">
                 <div class="card-body">
                     <h1 class="text-center my-4 card-title">ログイン</h1>
-                    
-                    {# フラッシュメッセージはlayout.htmlで処理されるため、ここでは不要 #}
 
-                    <form method="POST" action="{{ url_for('login') }}" id="login-form">
+                    {# フォーム (Blueprint名修正) #}
+                    <form method="POST" action="{{ url_for('auth.login') }}" id="login-form">
                         <div class="form-floating mb-3">
                             <input type="text" class="form-control" id="username" name="username" placeholder="ユーザー名" required>
                             <label for="username">ユーザー名</label>
                         </div>
-                        
-                        {# ▼▼▼ パスワード入力欄を修正 ▼▼▼ #}
                         <div class="input-group mb-3">
                             <div class="form-floating">
                                 <input type="password" class="form-control" id="password" name="password" placeholder="パスワード" required>
@@ -29,7 +25,6 @@
                                 <i class="bi bi-eye-fill"></i>
                             </button>
                         </div>
-                        
                         <div class="form-check mb-3">
                             <input class="form-check-input" type="checkbox" name="remember" id="remember">
                             <label class="form-check-label" for="remember">
@@ -41,7 +36,7 @@
                         </div>
                     </form>
                     <div class="text-center mt-3">
-                        <p>アカウントをお持ちでないですか？ <a href="{{ url_for('register') }}">新規登録</a></p>
+                        <p>アカウントをお持ちでないですか？ <a href="{{ url_for('auth.register') }}">新規登録</a></p> {# Blueprint名修正 #}
                     </div>
                 </div>
             </div>
@@ -50,37 +45,8 @@
 </div>
 {% endblock %}
 
+{# ▼▼▼ インラインスクリプトを削除し、外部JSファイルを読み込むように変更 ▼▼▼ #}
 {% block scripts %}
-<script>
-// --- パスワード表示切り替え機能 ---
-function setupPasswordToggle(inputId, buttonId) {
-    const toggleButton = document.getElementById(buttonId);
-    const passwordInput = document.getElementById(inputId);
-    if (!toggleButton || !passwordInput) return;
-
-    toggleButton.addEventListener('click', function () {
-        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-        passwordInput.setAttribute('type', type);
-        
-        const icon = this.querySelector('i');
-        icon.classList.toggle('bi-eye-fill');
-        icon.classList.toggle('bi-eye-slash-fill');
-    });
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    // パスワード表示切り替えをセットアップ
-    setupPasswordToggle('password', 'togglePassword');
-
-    // ローディング画面の機能をセットアップ
-    const loginForm = document.getElementById('login-form');
-
-    if (loginForm) {
-        // フォームが送信されたら、ロード画面を表示する
-        loginForm.addEventListener('submit', () => {
-            showLoadingOverlay('ログイン中...');
-        });
-    }
-});
-</script>
+<script src="{{ url_for('static', filename='js/authForms.js') }}"></script>
 {% endblock %}
+{# ▲▲▲ 修正ここまで ▲▲▲ #}

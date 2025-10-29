@@ -1,0 +1,73 @@
+{% extends "layout.html" %}
+{% block title %}テンプレート管理{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+    <div class="row">
+        <div class="col-lg-6 mb-5">
+            <div class="card">
+                <div class="card-header">
+                    <h3>新しいテンプレートを作成</h3>
+                </div>
+                <div class="card-body">
+                    {# フォームのアクションはJSで設定 #}
+                    <form method="post" id="template-form" action="">
+                        <div class="mb-3">
+                            <label for="template_title" class="form-label">テンプレート名</label>
+                            <input type="text" class="form-control" id="template_title" name="template_title" required>
+                        </div>
+                        <hr>
+                        <h5 class="mb-3">サブタスク</h5>
+                        <div id="subtasks-container"></div>
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-between mt-4">
+                            <button type="button" id="add-subtask-btn" class="btn btn-secondary"><i class="bi bi-plus-circle"></i> サブタスクを追加</button>
+                            <div>
+                                {# 戻るボタン (back_url がなければToDoリストへ, Blueprint名修正) #}
+                                <a href="{{ back_url or url_for('main.todo_list') }}" class="btn btn-outline-secondary">戻る</a>
+                                <button type="button" id="save-template-btn" class="btn btn-primary">テンプレートを保存</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <h3>既存のテンプレート</h3>
+            {# オフライン保存されたテンプレートがJSでここに挿入される #}
+            <div id="offline-templates-container"></div>
+            {% for template in templates %}
+                <div class="card mb-3">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span>{{ template.title }}</span>
+                        {# 削除フォーム (Blueprint名修正) #}
+                        <form action="{{ url_for('main.delete_template', template_id=template.id, back_url=back_url or '') }}" method="post" class="delete-template-form"> {# JSで確認ダイアログ用クラス追加 #}
+                            <button type="submit" class="btn btn-sm btn-outline-danger">削除</button>
+                        </form>
+                    </div>
+                    <ul class="list-group list-group-flush">
+                        {% for sub in template.subtask_templates %}
+                            <li class="list-group-item">{{ sub.content }} ({{ sub.grid_count }}マス)</li>
+                        {% else %}
+                             <li class="list-group-item text-muted small">サブタスクがありません。</li> {# 見た目を調整 #}
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% else %}
+                <p id="no-templates-message" {% if templates %}style="display: none;"{% endif %}> {# 初期状態でテンプレートがあれば隠す #}
+                    保存されているテンプレートはありません。
+                </p>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{# ▼▼▼ インラインスクリプトを削除し、外部JSファイルを読み込むように変更 ▼▼▼ #}
+{% block scripts %}
+{# offline.js を先に読み込む (オフライン機能のため) #}
+<script src="{{ url_for('static', filename='offline.js') }}"></script>
+{# 分離した manage_templates.js を読み込む #}
+<script src="{{ url_for('static', filename='js/manage_templates.js') }}"></script>
+{% endblock %}
+{# ▲▲▲ 修正ここまで ▲▲▲ #}

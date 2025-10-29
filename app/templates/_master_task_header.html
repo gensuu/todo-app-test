@@ -1,20 +1,22 @@
+{# このファイルは部分テンプレートであり、通常JSブロックは持ちません #}
+{# Blueprint名を url_for に追記 #}
 <span class="task-title-clickable {% if master_task.is_urgent %}text-urgent{% endif %}"
       data-bs-toggle="modal"
       data-bs-target="#taskFocusModal"
       data-task-title="{{ master_task.title }}"
       data-task-subtasks='{{ master_task.visible_subtasks_json | safe }}'>
 
-    {# --- ▼▼▼ 繰り返しタスクのアイコン表示 ▼▼▼ --- #}
+    {# --- 繰り返しタスクのアイコン表示 --- #}
     {% if master_task.recurrence_type == 'daily' %}
         <i class="bi bi-arrow-repeat" title="毎日繰り返し"></i>
     {% elif master_task.recurrence_type == 'weekly' %}
         <i class="bi bi-calendar-week" title="毎週繰り返し"></i>
     {% endif %}
-    {# --- ▲▲▲ アイコン表示 ▲▲▲ --- #}
+    {# --- アイコン表示ここまで --- #}
 
     {{ master_task.title }}
 
-    {# --- ▼▼▼ 日付表示ロジック修正 ▼▼▼ --- #}
+    {# --- 日付表示ロジック修正 --- #}
     <small class="text-muted">
         (
         {% if master_task.recurrence_type == 'none' %}
@@ -34,7 +36,7 @@
         {% endif %}
         )
     </small>
-    {# --- ▲▲▲ 日付表示ロジック修正 ▲▲▲ --- #}
+    {# --- 日付表示ロジック修正ここまで --- #}
 </span>
-{# 編集ボタンのリンクに current_date を追加 #}
-<a href="{{ url_for('add_or_edit_task', master_id=master_task.id, date_str=current_date.strftime('%Y-%m-%d')) }}" class="btn btn-sm btn-outline-light">[編集]</a>
+{# 編集ボタンのリンクに current_date を追加 (Blueprint名修正) #}
+<a href="{{ url_for('main.add_or_edit_task', master_id=master_task.id, date_str=current_date.strftime('%Y-%m-%d')) }}" class="btn btn-sm btn-outline-light">[編集]</a>

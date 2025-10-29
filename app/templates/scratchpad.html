@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="ja" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    {# interactive-widget=resizes-content は非標準であり、効果は限定的かもしれません #}
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
+    <title>今からTodo</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@300;400;700&display=swap" rel="stylesheet">
+
+    {# --- PWA対応 --- #}
+    {# Blueprint名を確認して修正 #}
+    <link rel="manifest" href="{{ url_for('main.serve_manifest') }}">
+    <meta name="theme-color" content="#212529">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/icon-192x192.png') }}">
+    {# --- PWA対応ここまで --- #}
+
+    <style>
+        :root { --dark-bg: #212529; --dark-border: #444; --text-color: #dee2e6; --primary-color: #6a5acd; }
+        html, body { height: 100%; }
+        body { font-family: 'Kalam', cursive; font-weight: 400; background-color: var(--dark-bg); color: var(--text-color); display: flex; flex-direction: column; margin: 0; overflow: hidden; }
+        .scratchpad-header { flex-shrink: 0; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--dark-border); position: sticky; top: 0; background-color: var(--dark-bg); z-index: 1020; }
+        .scratchpad-main { flex-grow: 1; overflow-y: auto; padding: 20px; }
+        .input-area { flex-shrink: 0; padding: 15px 20px; border-top: 1px solid var(--dark-border); display: flex; gap: 15px; align-items: center; background-color: var(--dark-bg); }
+        .scratchpad-header h1 { font-size: 1.5rem; margin: 0; }
+        .scratchpad-buttons .btn { width: 45px; height: 45px; border-radius: 50%; background-color: #343a40; border: 1px solid #495057; color: var(--text-color); box-shadow: 0 2px 5px rgba(0,0,0,0.2), inset 0 1px 1px rgba(255,255,255,0.05); transition: all 0.2s ease-in-out; font-size: 1.2rem; display: flex; justify-content: center; align-items: center; padding-top: 10px; }
+        .scratchpad-buttons .btn:hover { background-color: #495057; transform: translateY(-2px); }
+        .scratchpad-buttons .btn:disabled { opacity: 0.5; transform: none; cursor: not-allowed; }
+        #scratch-list { list-style: none; padding-left: 0; font-size: 1.6rem; line-height: 1.7; margin: 0;}
+        #scratch-list li { display: flex; align-items: center; position: relative; padding: 8px 0; }
+        .task-bullet { margin-right: 15px; color: #6c757d; transition: color 0.2s; cursor: pointer; user-select: none; }
+        .task-bullet:hover { color: #adb5bd; }
+        #scratch-list li.completed .task-text { color: #6c757d; position: relative; }
+        #scratch-list li.completed .task-text::after { content: ''; position: absolute; left: -2%; top: 55%; width: 104%; height: 2px; background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="4"><path d="M0,2 Q25,1 50,2 T100,2" stroke="%238d9399" stroke-width="2" fill="none"/></svg>'); background-repeat: repeat-x; background-size: contain; }
+        .task-text { position: relative; display: inline-block; }
+        .input-area input { flex-grow: 1; background-color: transparent; border: none; border-bottom: 2px solid var(--dark-border); color: var(--text-color); font-size: 1.5rem; font-family: 'Kalam', cursive; padding: 5px 0; }
+        .input-area input:focus { outline: none; border-bottom-color: var(--primary-color); }
+        .input-area .btn-add { width: 50px; height: 50px; font-size: 2rem; padding-top: 10px; flex-shrink: 0; border-radius: 50%; background-color: var(--primary-color); border: none; font-weight: 700; color: white; display: flex; justify-content: center; align-items: center; }
+        @media (max-width: 576px) { .scratchpad-main { padding-left: 15px; padding-right: 15px; } #scratch-list { font-size: 1.3rem; } .input-area input { font-size: 1.2rem; } .scratchpad-header h1 { font-size: 1.2rem; } }
+         /* ローディング表示 (layout.html からコピー) */
+        .loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(33, 37, 41, 0.85); justify-content: center; align-items: center; flex-direction: column; z-index: 9999; backdrop-filter: blur(5px); }
+    </style>
+</head>
+<body>
+    <header class="scratchpad-header">
+        <h1><i class="bi bi-pencil-square"></i> 今からTodo</h1>
+        <div class="scratchpad-buttons d-flex gap-2">
+            <button class="btn" id="restore-btn" title="前回のリストを復元" style="display: none;"><i class="bi bi-arrow-counterclockwise"></i></button>
+            {# 戻るボタン (Blueprint名修正) #}
+            <a href="{{ url_for('main.todo_list') }}" class="btn" title="戻る"><i class="bi bi-arrow-left"></i></a>
+            <button class="btn" id="export-btn" title="タスク一覧へ書き出し" disabled><i class="bi bi-send"></i></button>
+        </div>
+    </header>
+    <main class="scratchpad-main" id="scratchpad-main-area">
+        <ul id="scratch-list"></ul>
+    </main>
+    <div class="input-area" id="input-area">
+        <input type="text" id="new-scratch-task" placeholder="とりあえずやることを書く...">
+        <button class="btn btn-add" id="add-scratch-btn">+</button>
+    </div>
+
+    {# ローディング表示用のHTML #}
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="spinner-border text-light" style="width: 3rem; height: 3rem;" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p id="loading-text" class="mt-3 text-light h5">処理中...</p>
+    </div>
+
+    {# ▼▼▼ スクリプト読み込み ▼▼▼ #}
+    {# 共通関数 #}
+    <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+    {# PWA関連 (Service Worker URL を渡す) #}
+    <script> const SW_URL = "{{ url_for('main.serve_sw') }}"; </script>
+    <script src="{{ url_for('static', filename='js/pwa.js') }}"></script>
+    {# オフライン保存機能 #}
+    <script src="{{ url_for('static', filename='offline.js') }}"></script>
+
+    {# スクラッチパッド固有のロジック #}
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const list = document.getElementById('scratch-list');
+        const input = document.getElementById('new-scratch-task');
+        const addButton = document.getElementById('add-scratch-btn');
+        const exportButton = document.getElementById('export-btn');
+        const restoreButton = document.getElementById('restore-btn');
+        const mainArea = document.getElementById('scratchpad-main-area');
+        const STORAGE_KEY = 'scratchpadTasks';
+        const PREVIOUS_STORAGE_KEY = 'scratchpadTasks_previous';
+        // エクスポートAPIのURL (Blueprint名修正)
+        const EXPORT_URL = "{{ url_for('main.export_scratchpad') }}";
+        // TodoリストのURL (Blueprint名修正)
+        const TODO_LIST_URL = "{{ url_for('main.todo_list') }}";
+
+        // showLoadingOverlay, hideLoadingOverlay は utils.js から提供される想定
+        // saveScratchpadToOutbox は offline.js から提供される想定
+
+        const saveTasks = () => {
+            if (!list) return;
+            const tasks = Array.from(list.querySelectorAll('li')).map(li => ({
+                text: li.querySelector('.task-text')?.textContent || '',
+                completed: li.classList.contains('completed')
+            }));
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+            } catch (e) {
+                console.error("Failed to save tasks to localStorage:", e);
+                alert("タスクの保存に失敗しました。"); // Use modal/toast
+            }
+        };
+
+        const updateExportButtonState = () => {
+            if (!list || !exportButton) return;
+            exportButton.disabled = list.querySelectorAll('li:not(.completed)').length === 0;
+        };
+
+        const createTaskElement = (task) => {
+            if (!list || !task || typeof task.text !== 'string') return;
+            const li = document.createElement('li');
+            if (task.completed) li.classList.add('completed');
+            li.innerHTML = `<span class="task-bullet">•</span><span class="task-text">${task.text}</span>`; // Basic XSS prevention: textContent is safer if text can contain HTML
+
+            // Use event delegation for bullets if list becomes very large, otherwise direct listener is fine
+            const bullet = li.querySelector('.task-bullet');
+            if(bullet) {
+                bullet.addEventListener('click', () => {
+                    li.classList.toggle('completed');
+                    updateExportButtonState();
+                    saveTasks();
+                });
+            }
+            list.appendChild(li);
+        };
+
+        const loadTasks = () => {
+             if (!list) return;
+            let savedTasks = [];
+            try {
+                 savedTasks = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+                 if (!Array.isArray(savedTasks)) savedTasks = []; // Ensure it's an array
+            } catch (e) {
+                console.error("Failed to load or parse tasks from localStorage:", e);
+                savedTasks = []; // Load empty on error
+                // Optionally clear corrupted storage: localStorage.removeItem(STORAGE_KEY);
+            }
+            list.innerHTML = ''; // Clear existing list items
+            savedTasks.forEach(createTaskElement);
+            updateExportButtonState();
+        };
+
+        const addTask = () => {
+            if (!input || !list) return;
+            const taskText = input.value.trim();
+            if (taskText === '') return; // Don't add empty tasks
+            createTaskElement({ text: taskText, completed: false });
+            input.value = ''; // Clear input
+            input.focus(); // Keep focus on input
+            updateExportButtonState();
+            saveTasks();
+            // Scroll to bottom
+            if (mainArea) {
+                mainArea.scrollTo({ top: mainArea.scrollHeight, behavior: 'smooth' });
+            }
+        };
+
+        const exportTasks = () => {
+            if (!list || !exportButton) return;
+            const uncompletedTasks = Array.from(list.querySelectorAll('li:not(.completed) .task-text'))
+                                         .map(span => span.textContent);
+            if (uncompletedTasks.length === 0) {
+                console.log("No uncompleted tasks to export.");
+                return; // Nothing to export
+            }
+
+            // Show loading overlay (check function exists)
+            if (typeof showLoadingOverlay === 'function') showLoadingOverlay('タスクを書き出し中...');
+            else console.warn("showLoadingOverlay not found");
+
+            const isOffline = localStorage.getItem('offlineMode') === 'true' || !navigator.onLine;
+
+            if (isOffline && typeof saveScratchpadToOutbox === 'function') {
+                saveScratchpadToOutbox(uncompletedTasks)
+                    .then(() => {
+                        // Clear scratchpad after successful offline save
+                        localStorage.removeItem(STORAGE_KEY);
+                        localStorage.removeItem(PREVIOUS_STORAGE_KEY); // Also clear previous backup
+                        window.location.href = TODO_LIST_URL; // Redirect to main list
+                    })
+                    .catch(error => {
+                        console.error("Failed to save offline scratchpad task:", error);
+                        alert("オフラインでのタスク保存に失敗しました。"); // Use modal/toast
+                        if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay(); // Hide overlay on error
+                    });
+            } else if (isOffline && typeof saveScratchpadToOutbox !== 'function') {
+                 alert("オフラインモードですが、保存機能が利用できません。");
+                 if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay();
+            }
+            else { // Online
+                fetch(EXPORT_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ tasks: uncompletedTasks })
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error(`Server error: ${response.status}`);
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        // Clear scratchpad after successful export
+                        localStorage.removeItem(STORAGE_KEY);
+                        localStorage.removeItem(PREVIOUS_STORAGE_KEY);
+                        window.location.href = TODO_LIST_URL; // Redirect
+                    } else {
+                        throw new Error(data.message || '書き出しに失敗しました。');
+                    }
+                })
+                .catch(error => {
+                    console.error("Error exporting scratchpad tasks:", error);
+                    alert(`エラーが発生しました: ${error.message}`); // Use modal/toast
+                    if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay(); // Hide overlay on error
+                });
+            }
+        };
+
+        const restoreTasks = () => {
+            let previousTasks = [];
+            try {
+                const previousTasksJSON = localStorage.getItem(PREVIOUS_STORAGE_KEY);
+                if (previousTasksJSON) {
+                     previousTasks = JSON.parse(previousTasksJSON);
+                     if (!Array.isArray(previousTasks)) previousTasks = [];
+                }
+            } catch (e) { console.error("Failed to load or parse previous tasks:", e); }
+
+            if (previousTasks.length > 0 && list) {
+                list.innerHTML = ''; // Clear current list
+                previousTasks.forEach(createTaskElement); // Load previous tasks
+                localStorage.removeItem(PREVIOUS_STORAGE_KEY); // Remove backup
+                if (restoreButton) restoreButton.style.display = 'none'; // Hide restore button
+                saveTasks(); // Save the restored state as current
+                updateExportButtonState();
+                alert("前回のリストを復元しました。"); // Use modal/toast
+            } else {
+                 alert("復元するデータが見つかりません。"); // Use modal/toast
+                 if (restoreButton) restoreButton.style.display = 'none'; // Hide button if no data
+                 localStorage.removeItem(PREVIOUS_STORAGE_KEY); // Clean up if key exists but data is bad
+            }
+        };
+
+        // --- Initialization ---
+        // Check if loading with '?new=true' to clear and backup existing list
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('new')) {
+            const currentTasksJSON = localStorage.getItem(STORAGE_KEY);
+            if (currentTasksJSON) {
+                try {
+                    const currentTasks = JSON.parse(currentTasksJSON);
+                    // Only backup if there are actual tasks
+                    if (Array.isArray(currentTasks) && currentTasks.length > 0) {
+                        localStorage.setItem(PREVIOUS_STORAGE_KEY, currentTasksJSON);
+                    } else {
+                        localStorage.removeItem(PREVIOUS_STORAGE_KEY); // Clear any old backup
+                    }
+                } catch (e) {
+                    console.error("Error parsing current tasks before backup:", e);
+                    localStorage.removeItem(PREVIOUS_STORAGE_KEY); // Clear backup on error
+                }
+            } else {
+                localStorage.removeItem(PREVIOUS_STORAGE_KEY); // No current tasks, clear backup
+            }
+            localStorage.removeItem(STORAGE_KEY); // Clear current list for 'new' session
+            // Remove '?new=true' from URL without reloading
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+
+        // Show restore button if backup exists
+        if (restoreButton && localStorage.getItem(PREVIOUS_STORAGE_KEY)) {
+            restoreButton.style.display = 'flex'; // Use flex as per CSS
+        }
+
+        // Load current tasks and setup listeners
+        loadTasks();
+        if (addButton) addButton.addEventListener('click', addTask);
+        if (input) input.addEventListener('keypress', e => {
+            if (e.key === 'Enter') {
+                e.preventDefault(); // Prevent potential form submission if wrapped in one
+                addTask();
+            }
+        });
+        if (exportButton) exportButton.addEventListener('click', exportTasks);
+        if (restoreButton) restoreButton.addEventListener('click', restoreTasks);
+    });
+    </script>
+    {# ▲▲▲ スクリプトここまで ▲▲▲ #}
+</body>
+</html>

@@ -1,0 +1,228 @@
+{% extends "layout.html" %}
+
+{% block title %}Todoリスト{% endblock %}
+
+{% block content %}
+<div class="row">
+    {# --- サイドバー (左) --- #}
+    <aside class="col-md-3 d-none d-md-block sidebar-left">
+        <div class="sidebar-sticky">
+            <h2 class="sidebar-title">メニュー</h2>
+            <nav class="nav flex-column">
+                {# Blueprint名を追記 #}
+                <a class="nav-link btn btn-warning text-start mb-2 {% if request.endpoint == 'main.habit_calendar' %}active{% endif %}" href="{{ url_for('main.habit_calendar') }}">
+                    <i class="bi bi-calendar-heart-fill"></i> 習慣カレンダー
+                </a>
+                 <a class="nav-link btn btn-secondary text-start mb-2 scratchpad-btn" href="{{ url_for('main.scratchpad', new='true') }}">
+                    <i class="bi bi-pencil-square"></i> 今からTodoの開始
+                </a>
+                <a class="nav-link btn btn-primary text-start mb-2" href="{{ url_for('main.add_or_edit_task', date_str=current_date.strftime('%Y-%m-%d')) }}">
+                    <i class="bi bi-plus-circle-fill"></i> 新しいタスクを追加
+                </a>
+                <a class="nav-link btn btn-info text-start mb-2 {% if request.endpoint == 'main.manage_templates' %}active{% endif %}" href="{{ url_for('main.manage_templates') }}">
+                    <i class="bi bi-journal-album"></i> テンプレート管理
+                </a>
+                <form action="{{ url_for('main.export_to_sheet') }}" method="post" class="d-grid" id="export-sheet-form">
+                    <button type="submit" class="btn btn-success text-start mb-2">
+                        <i class="bi bi-file-earmark-spreadsheet-fill"></i> スプレッドシートへ書き出し
+                    </button>
+                </form>
+                <a class="nav-link btn btn-outline-secondary text-start mb-2 {% if request.endpoint == 'main.import_excel' %}active{% endif %}" href="{{ url_for('main.import_excel') }}">
+                    <i class="bi bi-file-earmark-arrow-up"></i> Excelからインポート
+                </a>
+                <a class="nav-link btn btn-outline-info text-start {% if request.endpoint == 'auth.settings' %}active{% endif %}" href="{{ url_for('auth.settings') }}">
+                    <i class="bi bi-gear-fill"></i> 設定
+                </a>
+            </nav>
+        </div>
+    </aside>
+
+    {# --- メインコンテンツ --- #}
+    <main class="col-md-6 col-lg-6 main-content">
+        {# --- ヘッダー --- #}
+        <header class="text-center my-4">
+            <h1>Todoリスト</h1>
+            <p class="lead">{{ current_date.strftime('%Y年%m月%d日') }}</p>
+            <div class="date-nav" id="date-nav-container">
+                {# JSによって動的に挿入される #}
+            </div>
+        </header>
+
+        {# --- グリッドセクション --- #}
+        <div class="grid-section">
+            <button class="btn btn-secondary w-100 mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#collapseGrid" aria-expanded="true" aria-controls="collapseGrid">
+                🟦 タスク進捗 方眼グリッド (全 <span id="total-count-display">{{ total_grid_count }}</span> マス中 <span id="completed-count-display">{{ completed_grid_count }}</span> マス完了)
+            </button>
+            <div class="collapse show" id="collapseGrid">
+                <div class="card card-body">
+                    <div class="grid-wrapper" style="--cols: {{ GRID_COLS }};">
+                        <div class="new-grid-container" style="--cols: {{ GRID_COLS }}; --rows: {{ grid_rows }};">
+                            {% for i in range(GRID_COLS * grid_rows) %}
+                                {% set cell_num = loop.index0 %}
+                                <div class="grid-cell
+                                    {% if cell_num < total_grid_count %}task-area{% endif %}
+                                    {% if cell_num < completed_grid_count %}completed{% endif %}
+                                "></div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# --- タスクリストコンテナ --- #}
+        <div class="task-list-container mt-4" id="task-list-container">
+
+             {# --- 繰り返しタスク セクション --- #}
+            <div class="recurring-tasks-section mb-4">
+                <button class="btn btn-dark w-100 mb-2 d-flex justify-content-between align-items-center" type="button" data-bs-toggle="collapse" data-bs-target="#collapseRecurringTasks" aria-expanded="true" aria-controls="collapseRecurringTasks">
+                    <span><i class="bi bi-arrow-repeat"></i> 今日の繰り返しタスク</span>
+                    <span class="badge bg-secondary rounded-pill">{{ recurring_tasks | length }}</span>
+                </button>
+                <div class="collapse show" id="collapseRecurringTasks">
+                    {% for master_task in recurring_tasks %}
+                        {# サブタスクがない場合は表示しない (visible_subtasksはapp側で設定済み) #}
+                        {% if master_task.visible_subtasks %}
+                        <div class="card master-task-card mb-3 {% if master_task.all_completed_today %}all-completed{% endif %}" data-master-id="{{ master_task.id }}">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                {# ヘッダー部分をインクルード (Blueprint名を追記) #}
+                                {% include '_master_task_header.html' with context %}
+                            </div>
+                            <ul class="list-group list-group-flush">
+                                {% for subtask in master_task.visible_subtasks %}
+                                    <li class="list-group-item sub-task d-flex align-items-center {% if subtask.is_completed %}completed{% endif %}" data-subtask-id="{{ subtask.id }}">
+                                        <i class="bi {{ 'bi-check-square-fill' if subtask.is_completed else 'bi-square' }} complete-toggle" style="cursor: pointer; margin-right: 10px;"></i>
+                                        <span class="flex-grow-1">
+                                            {{ subtask.content }} ({{ subtask.grid_count }}マス)
+                                        </span>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+                    {% else %}
+                        <div class="card card-body text-center bg-transparent border-0" id="no-recurring-task-message">
+                            <p class="mb-0 text-muted small">今日行う繰り返しタスクはありません。</p>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {# --- 繰り返しタスクここまで --- #}
+
+            {# --- 今日の通常タスク セクション --- #}
+            <h2 class="h4 mt-4">今日のタスク</h2>
+            {% for master_task in daily_tasks %}
+                 {# サブタスクがない場合は表示しない (visible_subtasksはapp側で設定済み) #}
+                {% if master_task.visible_subtasks %}
+                <div class="card master-task-card mb-3 {% if master_task.all_completed_today %}all-completed{% endif %}" data-master-id="{{ master_task.id }}">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                         {# ヘッダー部分をインクルード (Blueprint名を追記) #}
+                        {% include '_master_task_header.html' with context %}
+                    </div>
+                    <ul class="list-group list-group-flush">
+                        {% for subtask in master_task.visible_subtasks %}
+                            <li class="list-group-item sub-task d-flex align-items-center {% if subtask.is_completed %}completed{% endif %}" data-subtask-id="{{ subtask.id }}">
+                                <i class="bi {{ 'bi-check-square-fill' if subtask.is_completed else 'bi-square' }} complete-toggle" style="cursor: pointer; margin-right: 10px;"></i>
+                                <span class="flex-grow-1">
+                                    {{ subtask.content }} ({{ subtask.grid_count }}マス)
+                                </span>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+            {% else %}
+                {# 通常タスクがない場合 #}
+                {% if not recurring_tasks %} {# 繰り返しタスクもない場合のみ「タスクなし」を表示 #}
+                 <div class="card card-body text-center bg-transparent border-0" id="no-task-message">
+                    <p class="mb-0 text-muted small">今日行うタスクはありません。</p>
+                 </div>
+                {% endif %}
+            {% endfor %}
+             {# --- 今日の通常タスクここまで --- #}
+
+        </div>
+    </main>
+
+    {# --- 右サイドバー --- #}
+    <aside class="col-md-3 d-none d-md-block sidebar-right">
+        <div class="sidebar-sticky">
+             {# カレンダー表示エリア #}
+            <div class="card calendar-card mb-4" id="calendar-container">
+                 {# JSによって動的に挿入される #}
+            </div>
+            {# サマリー表示エリア #}
+            <h2 class="sidebar-title">サマリー</h2>
+            <div class="card summary-card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">今日の進捗</h5>
+                    <div class="progress-circle" data-progress="{{ (completed_grid_count / total_grid_count * 100) if total_grid_count > 0 else 0 }}">
+                        <span class="progress-text"></span>
+                    </div>
+                    <hr>
+                    <h5 class="card-title mt-4">統計</h5>
+                    <ul class="list-unstyled">
+                        <li><strong>ストリーク</strong>: <span id="summary-streak">{{ summary.streak if summary else '-' }}</span> 日</li>
+                        <li><strong>平均集中マス数</strong>: <span id="summary-average-grids">{{ summary.average_grids if summary else '-' }}</span> マス</li>
+                    </ul>
+                    {% if summary %}
+                    <small class="text-muted"> ({{ summary.summary_date.strftime('%Y-%m-%d') }} 時点)</small>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </aside>
+</div>
+
+{# --- スマホ用フッターナビゲーション (Blueprint名を追記) --- #}
+<nav class="d-md-none navbar fixed-bottom navbar-dark bg-dark">
+    <div class="container-fluid justify-content-around">
+        <a href="{{ url_for('main.manage_templates') }}" class="btn btn-secondary flex-fill {% if request.endpoint == 'main.manage_templates' %}active text-white{% endif %}" title="テンプレート管理">
+            <i class="bi bi-journal-album"></i><span class="d-block">テンプレ</span>
+        </a>
+        <a href="{{ url_for('main.habit_calendar') }}" class="btn btn-warning flex-fill {% if request.endpoint == 'main.habit_calendar' %}active text-white{% endif %}" title="習慣カレンダー">
+            <i class="bi bi-calendar-heart-fill"></i><span class="d-block">習慣</span>
+        </a>
+        <a href="{{ url_for('main.add_or_edit_task', date_str=current_date.strftime('%Y-%m-%d')) }}" class="btn btn-primary flex-fill" title="新しいタスクを追加">
+            <i class="bi bi-plus-circle-fill"></i><span class="d-block">追加</span>
+        </a>
+        <a href="{{ url_for('main.scratchpad', new='true') }}" class="btn btn-secondary scratchpad-btn-mobile flex-fill" title="今からTodo">
+            <i class="bi bi-pencil-square"></i><span class="d-block">今から</span>
+        </a>
+    </div>
+</nav>
+
+{# --- タスク集中モーダル --- #}
+<div class="modal fade" id="taskFocusModal" tabindex="-1" aria-labelledby="taskFocusModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h1 class="modal-title fs-5" id="taskFocusModalLabel">タスク詳細</h1>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <ul class="list-group list-group-flush" id="focus-subtask-list">
+                    {# JavaScriptによって動的に挿入される #}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{# ▼▼▼ インラインスクリプトを削除し、外部JSファイルを読み込むように変更 ▼▼▼ #}
+{% block scripts %}
+{# JavaScript にデータを渡すためのコンテナ (画面には表示されない) #}
+<div id="index-data-container"
+     data-current-date="{{ current_date.strftime('%Y-%m-%d') }}"
+     data-today="{{ today.strftime('%Y-%m-%d') }}"
+     data-task-counts="{{ task_counts | tojson | safe }}"
+     data-api-complete-url-base="{{ url_for('main.complete_subtask_api', subtask_id=0)[:-2] }}" {# ベースURL末尾の'/0'を削除 #}
+     style="display: none;"></div>
+
+{# 依存する可能性のある calendar.js を先に読み込む #}
+<script src="{{ url_for('static', filename='calendar.js') }}"></script>
+{# 分離した index.js を読み込む #}
+<script src="{{ url_for('static', filename='js/index.js') }}"></script>
+{% endblock %}
+{# ▲▲▲ 修正ここまで ▲▲▲ #}

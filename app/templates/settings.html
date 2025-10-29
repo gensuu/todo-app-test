@@ -28,7 +28,8 @@
                         <li>スプレッドシートのURLをコピーし、下のフォームに貼り付けて保存します。</li>
                     </ol>
                 </div>
-                <form method="POST" action="{{ url_for('settings') }}" id="settings-url-form">
+                {# フォーム (Blueprint名修正) #}
+                <form method="POST" action="{{ url_for('auth.settings') }}" id="settings-url-form">
                     <div class="mb-3">
                         <label for="spreadsheet_url" class="form-label">GoogleスプレッドシートURL</label>
                         <input type="url" class="form-control" id="spreadsheet_url" name="spreadsheet_url" value="{{ current_user.spreadsheet_url or '' }}" placeholder="https://docs.google.com/spreadsheets/..." required>
@@ -44,7 +45,8 @@
         <div class="card mb-4">
             <div class="card-body">
                 <h2 class="card-title text-center mb-4">パスワード変更</h2>
-                <form method="POST" action="{{ url_for('settings') }}" id="settings-password-form">
+                {# フォーム (Blueprint名修正) #}
+                <form method="POST" action="{{ url_for('auth.settings') }}" id="settings-password-form">
                     <div class="mb-3">
                         <label for="current_password" class="form-label">現在のパスワード</label>
                         <div class="input-group">
@@ -85,13 +87,14 @@
                 <h2 class="card-title text-center mb-4">アプリケーション</h2>
                  <p class="text-center text-muted">このアプリをホーム画面に追加して、素早くアクセスできます。</p>
                 <div class="d-grid">
+                    {# PWAインストールボタン (IDはJSで使用) #}
                     <button class="btn btn-info" id="install-app-button" style="display: none;">
                         <i class="bi bi-phone-fill"></i> アプリをインストール
                     </button>
                 </div>
             </div>
         </div>
-        
+
         <p class="text-muted mt-4 small">
             <strong>注意：</strong> 完了日から32日以上経過した「繰り返しではない」タスクは、随時データベースから自動的に削除される可能性があります。重要なデータは、定期的にスプレッドシートへ書き出してバックアップしてください。
         </p>
@@ -106,62 +109,17 @@
         {% endif %}
 
         <div class="text-center mt-4">
-            <a href="{{ url_for('todo_list') }}" class="btn btn-outline-secondary">戻る</a>
+             {# 戻るボタン (Blueprint名修正) #}
+            <a href="{{ url_for('main.todo_list') }}" class="btn btn-outline-secondary">戻る</a>
         </div>
         {% endif %}
     </div>
 </div>
 {% endblock %}
 
+{# ▼▼▼ インラインスクリプトを削除し、外部JSファイルを読み込むように変更 ▼▼▼ #}
 {% block scripts %}
-<script>
-    function setupPasswordToggle(inputId, buttonId) {
-        const toggleButton = document.getElementById(buttonId);
-        const passwordInput = document.getElementById(inputId);
-        if (!toggleButton || !passwordInput) return;
-
-        toggleButton.addEventListener('click', function () {
-            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-            passwordInput.setAttribute('type', type);
-            const icon = this.querySelector('i');
-            icon.classList.toggle('bi-eye-fill');
-            icon.classList.toggle('bi-eye-slash-fill');
-        });
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-        setupPasswordToggle('current_password', 'toggleCurrentPassword');
-        setupPasswordToggle('new_password', 'toggleNewPassword');
-        setupPasswordToggle('confirm_password', 'toggleConfirmPassword');
-
-        // --- ローディング表示 ---
-        document.getElementById('settings-url-form')?.addEventListener('submit', () => showLoadingOverlay('URLを保存中...'));
-        document.getElementById('settings-password-form')?.addEventListener('submit', () => showLoadingOverlay('パスワードを変更中...'));
-
-        // --- PWAインストールボタン ---
-        let deferredPrompt;
-        const installButton = document.getElementById('install-app-button');
-
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            installButton.style.display = 'block';
-        });
-
-        installButton.addEventListener('click', async () => {
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                const { outcome } = await deferredPrompt.userChoice;
-                console.log(`User response to the install prompt: ${outcome}`);
-                deferredPrompt = null;
-                installButton.style.display = 'none';
-            }
-        });
-
-        window.addEventListener('appinstalled', () => {
-            console.log('PWA was installed');
-            installButton.style.display = 'none';
-        });
-    });
-</script>
+<script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+{# PWAインストールボタンのロジックは layout.html からロードされる pwa.js が処理 #}
 {% endblock %}
+{# ▲▲▲ 修正ここまで ▲▲▲ #}
